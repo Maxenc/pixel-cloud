@@ -1,12 +1,6 @@
-# 🧩 Serverless Epitech Login – Projet AWS (Free Tier)
+# Serverless Epitech
 
-## 🚀 Objectif
-Ce projet a pour but de **déployer une API Serverless sécurisée (IAM-only)** sur AWS, sans aucun service payant.  
-L’infrastructure repose exclusivement sur **AWS Lambda**, **API Gateway (REST)** et **CloudWatch Logs**, avec une configuration entièrement **déployée via le Serverless Framework**.
-
----
-
-## ⚙️ Architecture Technique
+## Architecture Technique
 
 ```
 [User IAM Auth] 
@@ -19,16 +13,15 @@ L’infrastructure repose exclusivement sur **AWS Lambda**, **API Gateway (REST)
 ```
 
 **Caractéristiques :**
-- 🔒 Accès restreint IAM uniquement (aucun accès public)
-- ☁️ Full Serverless AWS
-- 🪵 Logs JSON centralisés (CloudWatch)
-- 💸 100 % Free Tier
-- 🧱 Environnements isolés : `dev` / `prod`
-- 🧰 Automatisé via Serverless Framework (v4+)
+- Accès restreint IAM uniquement (aucun accès public)
+- Full Serverless AWS
+- Logs JSON centralisés (CloudWatch)
+- Environnements isolés : `dev` / `prod`
+- Automatisé via Serverless
 
 ---
 
-## 📦 Prérequis
+## Prérequis
 
 - ✅ [Node.js 22.x](https://nodejs.org/)
 - ✅ [Serverless Framework v4+](https://www.serverless.com/framework/docs/getting-started/)
@@ -37,26 +30,26 @@ L’infrastructure repose exclusivement sur **AWS Lambda**, **API Gateway (REST)
 
 ---
 
-## 🔑 Étapes de mise en place
+## Steps
 
-### 1️⃣ Installer le Serverless Framework
+### 1. Installer le Serverless Framework
 ```bash
 npm install -g serverless
 ```
 
-### 2️⃣ Configurer les credentials AWS
+### 2. Configurer les credentials AWS
 ```bash
 aws configure --profile dev
 aws configure --profile prod
 ```
 
-### 3️⃣ Initialiser le projet
+### 3. Initialiser le projet
 ```bash
 mkdir serverless-epitech-login && cd serverless-epitech-login
 serverless create --template aws-nodejs
 ```
 
-### 4️⃣ Créer le handler Lambda (`handler.js`)
+### 4. Créer le handler Lambda (`handler.js`)
 ```js
 'use strict';
 
@@ -73,7 +66,7 @@ module.exports.login = async (event) => {
 };
 ```
 
-### 5️⃣ Créer la configuration Serverless (`serverless.yml`)
+### 5. Créer la configuration Serverless (`serverless.yml`)
 ```yaml
 service: serverless-epitech-login
 
@@ -122,55 +115,37 @@ functions:
           authorizer: aws_iam
 ```
 
-### 6️⃣ Déployer (dev)
+### 6. Déployer (dev)
 ```bash
 serverless deploy --aws-profile dev --stage dev
 ```
 
-### 7️⃣ Tester
+### 7. Tester
 ```bash
 curl https://<api>.execute-api.eu-west-3.amazonaws.com/dev/login
 aws lambda invoke --function-name serverless-epitech-login-dev-func out.json --profile dev
 cat out.json
 ```
 
-### 8️⃣ Logs CloudWatch
+### 8. Logs CloudWatch
 ```bash
 aws logs tail /aws/api-gateway/serverless-epitech-login-dev --follow --profile dev
 ```
 
-### 9️⃣ Déployer (prod)
+### 9. Déployer (prod)
 ```bash
 serverless deploy --aws-profile prod --stage prod
 ```
 
-### 🔟 Supprimer une stack
+### 10. Supprimer une stack
 ```bash
 serverless remove --aws-profile dev
 serverless remove --aws-profile prod
 ```
 
----
-
-## 🧠 Points clés pour la soutenance
-
-| Sujet | Réponse |
-|-------|----------|
-| **Sécurité** | IAM-only, aucun accès public |
-| **Logs** | CloudWatch JSON |
-| **Monitoring** | Logs + CloudFormation |
-| **Région** | eu-west-3 (Paris) |
-| **Runtime** | Node.js 22.x |
-| **Architecture** | Full Serverless (Lambda + API Gateway) |
-| **Free Tier** | ✅ 100 % gratuit |
-| **Environnements** | dev / prod isolés |
-| **Outil de déploiement** | Serverless Framework v4 |
-
----
-
-## 🏁 Auteur
+## Author
 
 **Projet Epitech – Serverless C2**  
-Réalisé par : *[Ton Nom]*  
+Réalisé par : *Arthur Pacaud*  
 Encadrant : Jérémie Jaouen  
-Année : 2025
+Année : Tek5
