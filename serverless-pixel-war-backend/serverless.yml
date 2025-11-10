@@ -1,0 +1,128 @@
+service: serverless-pixel-war-backend
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-west-3
+  stage: dev
+  memorySize: 128
+  timeout: 30
+
+  tracing:
+    lambda: true
+  logs:
+    http: true
+
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    PIXEL_TABLE: pixel_canvas
+    SNAPSHOT_BUCKET: pixel-canvas-snapshots
+    PIXEL_QUEUE: pixel-events-queue
+    LOG_LEVEL: INFO
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: arn:aws:logs:*:*:*
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Scan
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.PIXEL_TABLE}
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - arn:aws:sqs:${self:provider.region}:*:${self:provider.environment.PIXEL_QUEUE}
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::${self:provider.environment.SNAPSHOT_BUCKET}/*
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+# ======================================================
+# Lambda Functions
+# ======================================================
+functions:
+  proxy:
+    handler: proxy.handler
+    name: ${self:service}-${self:provider.stage}-proxy
+    events:
+      - httpApi:
+          path: /draw
+          method: post
+      - httpApi:
+          path: /view
+          method: get
+    environment:
+      QUEUE_URL:
+        Ref: PixelEventsQueue
+
+  worker:
+    handler: worker.handler
+    name: ${self:service}-${self:provider.stage}-worker
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - PixelEventsQueue
+              - Arn
+
+  snapshot:
+    handler: snapshot.handler
+    name: ${self:service}-${self:provider.stage}-snapshot
+    timeout: 60
+    events:
+      - schedule: rate(10 minutes)
+    environment:
+      TABLE_NAME: ${self:provider.environment.PIXEL_TABLE}
+      BUCKET_NAME: ${self:provider.environment.SNAPSHOT_BUCKET}
+
+# ======================================================
+# Resources : sqs dynamodb S3
+# ======================================================
+resources:
+  Resources:
+    PixelEventsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:provider.environment.PIXEL_QUEUE}
+        VisibilityTimeout: 30
+
+    PixelTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.PIXEL_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: pixel_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pixel_id
+            KeyType: HASH
+
+    SnapshotBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.SNAPSHOT_BUCKET}
+        AccessControl: Private
+        VersioningConfiguration:
+          Status: Enabled
