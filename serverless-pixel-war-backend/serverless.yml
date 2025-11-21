@@ -7,7 +7,7 @@ provider:
   region: eu-west-3
   stage: dev
   memorySize: 128
-  timeout: 30
+  timeout: 10
 
   tracing:
     lambda: true
@@ -18,19 +18,23 @@ provider:
     STAGE: ${self:provider.stage}
     REGION: ${self:provider.region}
     PIXEL_TABLE: pixel_canvas
+    RATE_LIMIT_TABLE: pixel_rate_limit
     SNAPSHOT_BUCKET: pixel-canvas-snapshots
     PIXEL_QUEUE: pixel-events-queue
+    MAX_PIXELS_PER_MINUTE: "20"
     LOG_LEVEL: INFO
 
   iam:
     role:
       statements:
+        # Logs Lambda
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: arn:aws:logs:*:*:*
+        # Table des pixels
         - Effect: Allow
           Action:
             - dynamodb:PutItem
@@ -38,6 +42,14 @@ provider:
             - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.PIXEL_TABLE}
+        # Table de rate-limit
+        - Effect: Allow
+          Action:
+            - dynamodb:UpdateItem
+            - dynamodb:GetItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.RATE_LIMIT_TABLE}
+        # SQS
         - Effect: Allow
           Action:
             - sqs:SendMessage
@@ -46,12 +58,14 @@ provider:
             - sqs:GetQueueAttributes
           Resource:
             - arn:aws:sqs:${self:provider.region}:*:${self:provider.environment.PIXEL_QUEUE}
+        # S3 snapshots
         - Effect: Allow
           Action:
             - s3:PutObject
             - s3:GetObject
           Resource:
             - arn:aws:s3:::${self:provider.environment.SNAPSHOT_BUCKET}/*
+        # X-Ray
         - Effect: Allow
           Action:
             - xray:PutTraceSegments
@@ -96,6 +110,22 @@ functions:
       TABLE_NAME: ${self:provider.environment.PIXEL_TABLE}
       BUCKET_NAME: ${self:provider.environment.SNAPSHOT_BUCKET}
 
+  health:
+    handler: proxy.handler
+    name: ${self:service}-${self:provider.stage}-health
+    events:
+      - httpApi:
+          path: /health
+          method: get
+
+  stats:
+    handler: proxy.handler
+    name: ${self:service}-${self:provider.stage}-stats
+    events:
+      - httpApi:
+          path: /stats
+          method: get
+
 # ======================================================
 # Resources : sqs dynamodb S3
 # ======================================================
@@ -118,6 +148,25 @@ resources:
         KeySchema:
           - AttributeName: pixel_id
             KeyType: HASH
+
+    PixelRateLimitTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.RATE_LIMIT_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: bucket
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: bucket
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
 
     SnapshotBucket:
       Type: AWS::S3::Bucket
