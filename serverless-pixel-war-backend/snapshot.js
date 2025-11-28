@@ -1,11 +1,11 @@
-import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+const { DynamoDBClient, ScanCommand } = require("@aws-sdk/client-dynamodb");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 const region = process.env.AWS_REGION || process.env.REGION;
 const ddb = new DynamoDBClient({ region });
 const s3 = new S3Client({ region });
 
-export const handler = async () => {
+const handler = async () => {
   console.log("Generating snapshot...");
 
   try {
@@ -56,3 +56,5 @@ export const handler = async () => {
     };
   }
 };
+
+module.exports = { handler };

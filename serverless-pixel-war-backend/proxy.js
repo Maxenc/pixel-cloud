@@ -1,18 +1,18 @@
-import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
-import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
+const { DynamoDBClient, ScanCommand } = require("@aws-sdk/client-dynamodb");
 
 const region = process.env.AWS_REGION || process.env.REGION;
 const sqs = new SQSClient({ region });
 const ddb = new DynamoDBClient({ region });
 
-export const handler = async (event) => {
+const handler = async (event) => {
   console.log("Incoming request:", JSON.stringify(event));
 
   const routeKey =
-      event?.routeKey ||
-      (event?.requestContext?.http
-          ? `${event.requestContext.http.method} ${event.rawPath}`
-          : "");
+    event?.routeKey ||
+    (event?.requestContext?.http
+      ? `${event.requestContext.http.method} ${event.rawPath}`
+      : "");
 
   // ---------- /health ----------
   if (routeKey === "GET /health") {
@@ -40,20 +40,20 @@ export const handler = async (event) => {
   if (routeKey === "GET /stats") {
     try {
       const data = await ddb.send(
-          new ScanCommand({
-            TableName: process.env.PIXEL_TABLE,
-          })
+        new ScanCommand({
+          TableName: process.env.PIXEL_TABLE,
+        })
       );
 
       const items =
-          (data.Items || []).map((item) => ({
-            pixel_id: item.pixel_id?.S,
-            x: item.x ? Number(item.x.N) : null,
-            y: item.y ? Number(item.y.N) : null,
-            color: item.color?.S,
-            user: item.user?.S,
-            timestamp: item.timestamp?.S,
-          })) || [];
+        (data.Items || []).map((item) => ({
+          pixel_id: item.pixel_id?.S,
+          x: item.x ? Number(item.x.N) : null,
+          y: item.y ? Number(item.y.N) : null,
+          color: item.color?.S,
+          user: item.user?.S,
+          timestamp: item.timestamp?.S,
+        })) || [];
 
       // on limite l’echantillon retourné pour éviter de tout balancer si la table grossi
       const sample = items.slice(0, 50);
@@ -104,10 +104,10 @@ export const handler = async (event) => {
     };
 
     await sqs.send(
-        new SendMessageCommand({
-          QueueUrl: process.env.QUEUE_URL,
-          MessageBody: JSON.stringify(message),
-        })
+      new SendMessageCommand({
+        QueueUrl: process.env.QUEUE_URL,
+        MessageBody: JSON.stringify(message),
+      })
     );
 
     return {
@@ -125,3 +125,5 @@ export const handler = async (event) => {
     };
   }
 };
+
+module.exports = { handler };

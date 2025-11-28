@@ -9,4 +9,3 @@ export const formatDate = (value) => {
     return value;
   }
 };
-

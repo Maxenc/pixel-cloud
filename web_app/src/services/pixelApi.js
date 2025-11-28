@@ -20,12 +20,16 @@ export class PixelApi {
     return this.#sessionId;
   }
 
-  async getSnapshot() {
-    return this.#request("/canvas/snapshot");
+  async getSnapshot({ clientId, sessionId } = {}) {
+    const params = new URLSearchParams();
+    if (clientId) params.append("connectionId", clientId);
+    if (sessionId) params.append("sessionId", sessionId);
+    const suffix = params.toString() ? `/view?${params.toString()}` : "/view";
+    return this.#request(suffix);
   }
 
   async placePixel(payload) {
-    return this.#request("/canvas/pixel", {
+    return this.#request("/draw", {
       method: "POST",
       body: JSON.stringify(payload),
     });

@@ -1,6 +1,7 @@
 const defaultConfig = {
-  apiBaseUrl: "https://jw7jhjmjfb.execute-api.eu-west-3.amazonaws.com",
+  apiBaseUrl: "https://og37myg23c.execute-api.eu-west-3.amazonaws.com",
   pollingIntervalMs: 5000,
+  wsBaseUrl: "wss://fkvt75ztjf.execute-api.eu-west-3.amazonaws.com/dev/",
   board: { width: 256, height: 256 },
   discordAuthorizeEndpoint: "https://discord.com/oauth2/authorize",
   discordClientId: "1436365247056314569",
@@ -8,12 +9,23 @@ const defaultConfig = {
   discordRedirectUri: null,
   authExchangePath: "/auth/discord/exchange",
   redirectAuthUri:
-    "https://jw7jhjmjfb.execute-api.eu-west-3.amazonaws.com/auth",
+    "https://og37myg23c.execute-api.eu-west-3.amazonaws.com/auth",
+  rateLimit: {
+    maxPlacements: 20,
+    windowSeconds: 60,
+  },
 };
+
+const runtimeConfig =
+  typeof window !== "undefined" ? window.__PIXEL_APP_CONFIG__ ?? {} : {};
 
 export const appConfig = {
   ...defaultConfig,
-  ...(typeof window !== "undefined" ? window.__PIXEL_APP_CONFIG__ ?? {} : {}),
+  ...runtimeConfig,
+  rateLimit: {
+    ...defaultConfig.rateLimit,
+    ...(runtimeConfig?.rateLimit ?? {}),
+  },
 };
 
 export const colorPalette = [

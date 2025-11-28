@@ -8,7 +8,7 @@ const crypto = require("crypto");
 const REGION = process.env.REGION || "eu-west-3";
 const DISCORD_SECRET_NAME = "discord_secret";
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE || "sessions";
-const FRONTEND_URL = "https://3c2983b0231c.ngrok-free.app";
+const FRONTEND_URL = "https://0e77183d291f.ngrok-free.app";
 const DISCORD_API = "https://discord.com/api/v10";
 
 const secretsClient = new SecretsManagerClient({ region: REGION });
