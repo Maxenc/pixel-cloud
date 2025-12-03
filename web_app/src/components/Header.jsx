@@ -3,7 +3,13 @@ const buildAvatarUrl = (user) => {
   return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64`;
 };
 
-export function Header({ user, onLogin, onLogout }) {
+export function Header({
+  user,
+  onLogin,
+  onLogout,
+  onToggleSnapshots,
+  snapshotsOpen,
+}) {
   const avatarUrl = buildAvatarUrl(user);
 
   return (
@@ -13,6 +19,15 @@ export function Header({ user, onLogin, onLogout }) {
         <p>Canvas minimaliste, réinventé.</p>
       </div>
       <div className="auth-block">
+        <button
+          className="burger-button"
+          onClick={onToggleSnapshots}
+          aria-pressed={snapshotsOpen}
+          aria-label="Basculer l'historique des snapshots"
+          type="button"
+        >
+          ☰ Snapshots
+        </button>
         {user ? (
           <>
             <div className="user-chip">

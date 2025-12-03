@@ -2,7 +2,9 @@ service: serverless-pixel-war-backend
 frameworkVersion: "4"
 
 custom:
-  pixelTopicName: ${self:service}-${self:provider.stage}-pixel-events
+  stage: ${opt:stage, self:provider.stage}
+  pixelTopicName: ${self:service}-${self:custom.stage}-pixel-events
+  snapshotTopicName: ${self:service}-${self:custom.stage}-snapshot-requests
 
 provider:
   name: aws
@@ -12,6 +14,7 @@ provider:
   websocketsApiName: ${self:service}-${self:provider.stage}-ws
   memorySize: 128
   timeout: 10
+  logRetentionInDays: 30
   httpApi:
     cors:
       allowedOrigins:
@@ -19,6 +22,7 @@ provider:
 
   tracing:
     lambda: true
+    apiGateway: true
   logs:
     http: true
 
@@ -27,13 +31,17 @@ provider:
     REGION: ${self:provider.region}
     PIXEL_TABLE: pixel_canvas
     RATE_LIMIT_TABLE: pixel_rate_limit
-    SNAPSHOT_BUCKET: pixel-canvas-snapshots
+    SNAPSHOT_IMAGE_BUCKET: ${self:service}-${self:provider.stage}-snapshot-images
+    SNAPSHOT_REQUEST_TOPIC_ARN: arn:aws:sns:${self:provider.region}:${aws:accountId}:${self:custom.snapshotTopicName}
     PIXEL_QUEUE: pixel-events-queue
     MAX_PIXELS_PER_MINUTE: "20"
     LOG_LEVEL: INFO
     SESSIONS_TABLE: pixel_sessions
     CONNECTIONS_TABLE: pixel_connections
     JWT_SECRET: super-secret-jwt-key
+    SNAPSHOT_ADMIN_ID: "285192042693525510"
+    BOARD_WIDTH: "256"
+    BOARD_HEIGHT: "256"
 
   iam:
     role:
@@ -74,8 +82,10 @@ provider:
           Action:
             - s3:PutObject
             - s3:GetObject
+            - s3:ListBucket
           Resource:
-            - arn:aws:s3:::${self:provider.environment.SNAPSHOT_BUCKET}/*
+            - arn:aws:s3:::${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
+            - arn:aws:s3:::${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}/*
         # X-Ray
         - Effect: Allow
           Action:
@@ -135,12 +145,37 @@ functions:
   snapshot:
     handler: snapshot.handler
     name: ${self:service}-${self:provider.stage}-snapshot
-    timeout: 60
     events:
-      - schedule: rate(10 minutes)
+      - httpApi:
+          path: /create_snapshot
+          method: post
+    environment:
+      SNAPSHOT_REQUEST_TOPIC_ARN: ${self:provider.environment.SNAPSHOT_REQUEST_TOPIC_ARN}
+      SNAPSHOT_ADMIN_ID: ${self:provider.environment.SNAPSHOT_ADMIN_ID}
+
+  snapshotWorker:
+    handler: snapshotWorker.handler
+    name: ${self:service}-${self:provider.stage}-snapshot-worker
+    timeout: 120
+    events:
+      - sns:
+          topicName: ${self:custom.snapshotTopicName}
     environment:
       TABLE_NAME: ${self:provider.environment.PIXEL_TABLE}
-      BUCKET_NAME: ${self:provider.environment.SNAPSHOT_BUCKET}
+      SNAPSHOT_IMAGE_BUCKET: ${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
+      PIXEL_TOPIC_ARN: arn:aws:sns:${self:provider.region}:${aws:accountId}:${self:custom.pixelTopicName}
+      BOARD_WIDTH: ${self:provider.environment.BOARD_WIDTH}
+      BOARD_HEIGHT: ${self:provider.environment.BOARD_HEIGHT}
+
+  snapshotsList:
+    handler: snapshotsList.handler
+    name: ${self:service}-${self:provider.stage}-snapshots-list
+    events:
+      - httpApi:
+          path: /snapshots
+          method: get
+    environment:
+      SNAPSHOT_IMAGE_BUCKET: ${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
 
   health:
     handler: proxy.handler
@@ -264,13 +299,41 @@ resources:
           AttributeName: ttl
           Enabled: true
 
-    SnapshotBucket:
+    SnapshotImageBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:provider.environment.SNAPSHOT_BUCKET}
-        AccessControl: Private
+        BucketName: ${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
         VersioningConfiguration:
           Status: Enabled
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: false
+          RestrictPublicBuckets: false
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - "*"
+              AllowedMethods:
+                - GET
+                - HEAD
+              AllowedHeaders:
+                - "*"
+              MaxAge: 300
+
+    SnapshotImageBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref SnapshotImageBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: AllowPublicRead
+              Effect: Allow
+              Principal: "*"
+              Action:
+                - s3:GetObject
+              Resource: arn:aws:s3:::${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}/*
 
     SessionsTable:
       Type: AWS::DynamoDB::Table

@@ -60,7 +60,14 @@ export const CanvasStage = forwardRef(function CanvasStage(
       const x = index % width;
       const y = Math.floor(index / width);
       ctx.fillStyle = color ?? "#000000";
-      ctx.fillRect(x, y, 1, 1);
+      // Draw with a small gap to create a border effect
+      // Using 0.9 size centered (offset 0.05) creates a gap
+      // To make the grid lines visible (grey), we can rely on the background color #0f172a
+      // or draw a stroke. Let's use stroke for a subtle grey grid.
+      ctx.fillRect(x, y, 1, 1); // Fill full pixel first
+      ctx.lineWidth = 0.05;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)"; // Subtle grey/white stroke
+      ctx.strokeRect(x, y, 1, 1);
     });
   }, [snapshot]);
 

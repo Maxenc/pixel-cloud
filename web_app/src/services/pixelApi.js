@@ -39,6 +39,17 @@ export class PixelApi {
     return this.#request(`/pixels/${x}/${y}`);
   }
 
+  async requestSnapshot(userId) {
+    return this.#request("/create_snapshot", {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async getSnapshots() {
+    return this.#request("/snapshots");
+  }
+
   async #request(path, options = {}) {
     const url = path.startsWith("http") ? path : `${this.#baseUrl}${path}`;
     const headers = {

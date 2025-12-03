@@ -14,6 +14,7 @@ const defaultConfig = {
     maxPlacements: 20,
     windowSeconds: 60,
   },
+  snapshotAdminId: "285192042693525510",
 };
 
 const runtimeConfig =

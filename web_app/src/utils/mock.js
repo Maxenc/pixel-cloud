@@ -2,7 +2,6 @@ export const buildMockMeta = (x, y, color) => ({
   x,
   y,
   color,
-  author: "Anonyme",
-  updated_at: new Date().toISOString(),
+  // author: undefined, // Remove default "Anonyme"
+  // updated_at: undefined, // Remove default date
 });
-

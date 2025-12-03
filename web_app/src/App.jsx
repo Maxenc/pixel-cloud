@@ -8,6 +8,7 @@ import { CanvasStage } from "./components/CanvasStage";
 import { PixelInfoCard } from "./components/PixelInfoCard";
 import { ColorPickerPopover } from "./components/ColorPickerPopover";
 import { StatusToast } from "./components/StatusToast";
+import { SnapshotDrawer } from "./components/SnapshotDrawer";
 import { extractSessionDataFromUrl } from "./utils/oauth";
 
 export default function App() {
@@ -38,6 +39,10 @@ export default function App() {
   const [showPalette, setShowPalette] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [pixelAnchor, setPixelAnchor] = useState(null);
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState([]);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+  const [requestingSnapshot, setRequestingSnapshot] = useState(false);
 
   const quickPalette = colorPalette.slice(0, 8);
   const cooldownDuration = appConfig.rateLimit?.windowSeconds ?? 60;
@@ -52,6 +57,7 @@ export default function App() {
   }, [cooldown]);
 
   const canPlacePixel = Boolean(user) && cooldown === 0;
+  const isAdmin = user?.id === appConfig.snapshotAdminId;
 
   const notifyCooldown = () => {
     setStatus({
@@ -59,6 +65,34 @@ export default function App() {
       message: `Attends ${cooldown || cooldownDuration}s avant de rejouer.`,
     });
   };
+
+  const loadSnapshots = useCallback(async () => {
+    setLoadingSnapshots(true);
+    try {
+      const data = await api.getSnapshots();
+      setSnapshots(data?.snapshots ?? []);
+    } catch (error) {
+      console.error("Snapshots fetch error", error);
+      setStatus({
+        type: "error",
+        message: "Impossible de récupérer les snapshots.",
+      });
+    } finally {
+      setLoadingSnapshots(false);
+    }
+  }, [api]);
+
+  const handleSnapshotReady = useCallback(
+    (payload) => {
+      setStatus({
+        type: "success",
+        message: "Nouvelle snapshot disponible.",
+      });
+      setSnapshotsOpen(true);
+      loadSnapshots();
+    },
+    [loadSnapshots]
+  );
 
   const persistUser = useCallback((nextUser) => {
     setUserState(nextUser);
@@ -136,6 +170,8 @@ export default function App() {
           const message = JSON.parse(event.data);
           if (message?.type === "pixel" && message.payload) {
             applyPixelUpdate(message.payload);
+          } else if (message?.type === "snapshot_ready") {
+            handleSnapshotReady(message.payload);
           }
         } catch (error) {
           console.warn("Message WebSocket invalide", error);
@@ -146,7 +182,7 @@ export default function App() {
         wsRef.current = null;
       };
     },
-    [applyPixelUpdate, closeLiveConnection]
+    [applyPixelUpdate, closeLiveConnection, handleSnapshotReady]
   );
 
   const refreshSnapshot = useCallback(
@@ -223,7 +259,7 @@ export default function App() {
               author: current.user ?? "inconnu",
               updated_at: current.timestamp ?? new Date().toISOString(),
             }
-          : buildMockMeta(x, y, currentColor)
+          : buildMockMeta(x, y, null) // Pass null color for empty pixel
       );
     },
     [snapshot, currentColor]
@@ -289,6 +325,7 @@ export default function App() {
         updated_at: new Date().toISOString(),
       });
       setStatus({ type: "success", message: "Pixel posé avec succès." });
+      setTimeout(() => setStatus(null), 3000);
       await refreshSnapshot(true);
       setShowPalette(false);
     } catch (error) {
@@ -303,6 +340,33 @@ export default function App() {
   };
 
   const handleCancelPlacement = () => setShowPalette(false);
+
+  const handleRequestSnapshot = useCallback(async () => {
+    if (!user || !isAdmin) {
+      setStatus({
+        type: "error",
+        message: "Tu n'as pas les droits pour lancer une snapshot.",
+      });
+      return;
+    }
+    setSnapshotsOpen(true);
+    setRequestingSnapshot(true);
+    try {
+      await api.requestSnapshot(user.id);
+      setStatus({
+        type: "success",
+        message: "Snapshot en cours de génération...",
+      });
+    } catch (error) {
+      console.error("Snapshot request error", error);
+      setStatus({
+        type: "error",
+        message: "Impossible de lancer la snapshot.",
+      });
+    } finally {
+      setRequestingSnapshot(false);
+    }
+  }, [api, user, isAdmin]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -323,6 +387,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, persistUser]);
 
+  useEffect(() => {
+    loadSnapshots();
+  }, [loadSnapshots]);
+
   const handleLogout = useCallback(() => {
     api.setToken(null);
     persistUser(null);
@@ -339,7 +407,13 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Header user={user} onLogin={startDiscordLogin} onLogout={handleLogout} />
+      <Header
+        user={user}
+        onLogin={startDiscordLogin}
+        onLogout={handleLogout}
+        onToggleSnapshots={() => setSnapshotsOpen((prev) => !prev)}
+        snapshotsOpen={snapshotsOpen}
+      />
       {cooldown > 0 && (
         <div className="rate-limit-banner">
           Encore {cooldown}s avant de pouvoir rejouer.
@@ -412,6 +486,17 @@ export default function App() {
           cooldown={cooldown}
         />
       )}
+
+      <SnapshotDrawer
+        open={snapshotsOpen}
+        snapshots={snapshots}
+        loading={loadingSnapshots}
+        onClose={() => setSnapshotsOpen(false)}
+        onRefresh={loadSnapshots}
+        canCreateSnapshot={isAdmin}
+        onCreateSnapshot={handleRequestSnapshot}
+        requestingSnapshot={requestingSnapshot}
+      />
 
       <StatusToast status={status} />
     </div>

@@ -1,60 +1,79 @@
-const { DynamoDBClient, ScanCommand } = require("@aws-sdk/client-dynamodb");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+const crypto = require("crypto");
 
-const region = process.env.AWS_REGION || process.env.REGION;
-const ddb = new DynamoDBClient({ region });
-const s3 = new S3Client({ region });
+const REGION = process.env.AWS_REGION || process.env.REGION;
+const ADMIN_ID = process.env.SNAPSHOT_ADMIN_ID;
+const REQUEST_TOPIC_ARN = process.env.SNAPSHOT_REQUEST_TOPIC_ARN;
 
-const handler = async () => {
-  console.log("Generating snapshot...");
+const sns = new SNSClient({ region: REGION });
 
+const handler = async (event) => {
   try {
-    const pixels = await ddb.send(
-        new ScanCommand({
-          TableName: process.env.TABLE_NAME,
-        })
-    );
+    const payload = parsePayload(event.body);
+    authorize(payload.userId);
 
-    const canvasData = (pixels.Items || []).map((item) => ({
-      x: Number(item.x.N),
-      y: Number(item.y.N),
-      color: item.color.S,
-      user: item.user.S,
-    }));
-
-    const snapshot = {
-      generatedAt: new Date().toISOString(),
-      totalPixels: canvasData.length,
-      pixels: canvasData,
+    const request = {
+      requestId: crypto.randomUUID(),
+      requestedBy: payload.userId,
+      requestedAt: new Date().toISOString(),
+      callbackUrl: payload.callbackUrl,
     };
 
-    const objectKey = `snapshot-${Date.now()}.json`;
-
-    await s3.send(
-        new PutObjectCommand({
-          Bucket: process.env.BUCKET_NAME,
-          Key: objectKey,
-          Body: JSON.stringify(snapshot, null, 2),
-          ContentType: "application/json",
-        })
+    await sns.send(
+      new PublishCommand({
+        TopicArn: REQUEST_TOPIC_ARN,
+        Message: JSON.stringify(request),
+      })
     );
 
-    console.log(`✅ Snapshot saved to S3 as ${objectKey}`);
-
     return {
-      statusCode: 200,
+      statusCode: 202,
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        message: "Snapshot generated",
-        key: objectKey,
+        status: "pending",
+        requestId: request.requestId,
       }),
     };
-  } catch (err) {
-    console.error("❌ Snapshot generation failed:", err);
+  } catch (error) {
+    console.error("Snapshot request error", error);
+    const statusCode = error.statusCode || 400;
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Snapshot failed" }),
+      statusCode,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message: error.message || "Snapshot failed" }),
     };
   }
 };
+
+function parsePayload(rawBody) {
+  if (!rawBody) {
+    throw buildError(400, "Payload manquant");
+  }
+  try {
+    const data = JSON.parse(rawBody);
+    return {
+      userId: data.userId ?? data.user?.id,
+      callbackUrl: data.callbackUrl,
+    };
+  } catch {
+    throw buildError(400, "Payload invalide");
+  }
+}
+
+function authorize(userId) {
+  if (!userId || userId !== ADMIN_ID) {
+    throw buildError(403, "Accès refusé");
+  }
+}
+
+function buildError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
 
 module.exports = { handler };
