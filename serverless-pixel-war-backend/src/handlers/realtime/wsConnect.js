@@ -4,12 +4,15 @@ const {
   DeleteItemCommand,
 } = require("@aws-sdk/client-dynamodb");
 const { ddb } = require("../../utils/aws");
+const { getSession } = require("../../utils/security");
 
 const handler = async (event) => {
   const connectionId = event.requestContext.connectionId;
   const params = event.queryStringParameters || {};
   const clientId = params.clientId || connectionId;
-  const sessionId = params.sessionId;
+  
+  // Verify session if provided
+  const session = await getSession(event);
 
   try {
     if (clientId) {
@@ -50,15 +53,22 @@ const handler = async (event) => {
       }
     }
 
+    const item = {
+      connectionId: { S: connectionId },
+      clientId: { S: clientId },
+      connectedAt: { S: new Date().toISOString() },
+    };
+
+    if (session) {
+      item.sessionId = { S: session.sessionId };
+      item.userId = { S: session.userId };
+      item.username = { S: session.username };
+    }
+
     await ddb.send(
       new PutItemCommand({
         TableName: process.env.CONNECTIONS_TABLE,
-        Item: {
-          connectionId: { S: connectionId },
-          clientId: { S: clientId },
-          ...(sessionId ? { sessionId: { S: sessionId } } : {}),
-          connectedAt: { S: new Date().toISOString() },
-        },
+        Item: item,
       })
     );
     return { statusCode: 200, body: "Connected" };

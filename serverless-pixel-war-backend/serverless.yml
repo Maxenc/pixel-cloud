@@ -13,6 +13,7 @@ custom:
   sessionsTable: ${self:service}-${self:custom.stage}-sessions
   rateLimitTable: ${self:service}-${self:custom.stage}-ratelimit
   discordSecretName: ${self:service}-${self:custom.stage}-discord-app
+  internalApiSecret: ${self:service}-${self:custom.stage}-internal-secret
   # SQS Queues
   drawQueue: ${self:service}-${self:custom.stage}-draw-queue
   drawQueueDLQ: ${self:service}-${self:custom.stage}-draw-queue-dlq
@@ -72,6 +73,7 @@ provider:
     BOARD_WIDTH: "256"
     BOARD_HEIGHT: "256"
     MAX_PIXELS_PER_MINUTE: "20"
+    INTERNAL_API_SECRET: ${self:custom.internalApiSecret}
 
   httpApi:
     cors:

@@ -5,6 +5,7 @@ const {
 const { SendMessageCommand } = require("@aws-sdk/client-sqs");
 const { ddb, sqs } = require("../../utils/aws");
 const { parseBody, success, error } = require("../../utils/common");
+const { getSession, checkInternalSecret } = require("../../utils/security");
 
 const MAX_WIDTH = parseInt(process.env.BOARD_WIDTH || "256");
 const MAX_HEIGHT = parseInt(process.env.BOARD_HEIGHT || "256");
@@ -44,8 +45,24 @@ const enforceRateLimit = async (userId) => {
 };
 
 const handler = async (event) => {
+  // 1. Authenticate
+  let userId, username;
+  const session = await getSession(event);
+
+  if (session) {
+    userId = session.userId;
+    username = session.username;
+  } else if (checkInternalSecret(event)) {
+    const body = parseBody(event);
+    userId = body.userId;
+    username = body.username;
+  } else {
+    return error(401, "Unauthorized");
+  }
+
+  // 2. Parse and Validate Body
   const body = parseBody(event);
-  const { x, y, color, userId, username } = body;
+  const { x, y, color } = body;
 
   if (
     x === undefined ||
@@ -60,7 +77,6 @@ const handler = async (event) => {
   }
 
   const canvasId = "main";
-  const actorId = userId || "anonymous";
 
   try {
     const sessionResult = await ddb.send(
@@ -75,7 +91,7 @@ const handler = async (event) => {
       return error(403, `Canvas is ${status}, cannot draw.`);
     }
 
-    const withinQuota = await enforceRateLimit(actorId);
+    const withinQuota = await enforceRateLimit(userId);
     if (!withinQuota) {
       return error(429, "Rate limit exceeded");
     }
@@ -87,7 +103,7 @@ const handler = async (event) => {
           x,
           y,
           color,
-          userId: actorId,
+          userId,
           username,
           canvasId,
           timestamp: new Date().toISOString(),

@@ -104,6 +104,9 @@ export default function App() {
       try {
         const data = await api.getGameState();
         setGameState(data);
+        if (data?.status) {
+          setIsPaused(data.status === "PAUSED");
+        }
       } catch (error) {
         console.error("Game state fetch error", error);
         if (!silent) {
@@ -436,6 +439,7 @@ export default function App() {
     try {
       await api.pauseGame(user.id);
       setStatus({ type: "success", message: "Pause demandée." });
+      setIsPaused(true);
     } catch (e) {
       setStatus({ type: "error", message: e.message });
     }
@@ -445,6 +449,7 @@ export default function App() {
     try {
       await api.resumeGame(user.id);
       setStatus({ type: "success", message: "Reprise demandée." });
+      setIsPaused(false);
     } catch (e) {
       setStatus({ type: "error", message: e.message });
     }

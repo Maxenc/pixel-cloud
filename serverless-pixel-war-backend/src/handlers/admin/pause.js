@@ -2,16 +2,25 @@ const { UpdateItemCommand } = require("@aws-sdk/client-dynamodb");
 const { PublishCommand } = require("@aws-sdk/client-sns");
 const { ddb, sns } = require("../../utils/aws");
 const { isAdmin, parseBody, success, error } = require("../../utils/common");
+const { getSession, checkInternalSecret } = require("../../utils/security");
 
 const handler = async (event) => {
+  let userId;
+  const session = await getSession(event);
+
+  if (session) {
+    userId = session.userId;
+  } else if (checkInternalSecret(event)) {
+    const body = parseBody(event);
+    userId = body.userId;
+  } else {
+    return error(401, "Unauthorized");
+  }
+
   const body = parseBody(event);
-  const userId = body.userId;
   const canvasId = body.canvasId || "main";
 
-  const effectiveUserId =
-    event.requestContext?.authorizer?.jwt?.claims?.sub || userId;
-
-  if (!(await isAdmin(effectiveUserId))) {
+  if (!(await isAdmin(userId))) {
     return error(403, "Unauthorized");
   }
 

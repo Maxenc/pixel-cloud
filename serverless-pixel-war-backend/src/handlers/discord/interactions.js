@@ -100,6 +100,7 @@ const callPixelApi = async (path, init = {}) => {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "x-internal-secret": process.env.INTERNAL_API_SECRET,
       ...(init.headers || {}),
     },
   });
