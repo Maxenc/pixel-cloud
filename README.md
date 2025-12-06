@@ -96,9 +96,3 @@ Ce script (hérité du projet d’origine) publie les commandes globales.
 - Secrets Manager, Discord interactions (Ed25519), OAuth2.
 - CloudFront/S3 privé via `serverless-finch`.
 - UX : WebSocket React, toasts auto-expirants, rate limit UX.
-
-## Références utiles
-
-- `DEPLOYMENT_NOTES.md` : commandes build/deploy + runbook.
-- `SECURITY_REPORT.txt` : audit sécurité + recommandations (AuthN, WAF, alarms).
-- `PROJECT_JOURNAL.txt` : histoire détaillée du projet (décisions et incidents).
