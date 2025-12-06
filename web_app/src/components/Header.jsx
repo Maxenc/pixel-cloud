@@ -9,6 +9,8 @@ export function Header({
   onLogout,
   onToggleSnapshots,
   snapshotsOpen,
+  onOpenAdmin,
+  isAdmin
 }) {
   const avatarUrl = buildAvatarUrl(user);
 
@@ -19,6 +21,15 @@ export function Header({
         <p>Canvas minimaliste, réinventé.</p>
       </div>
       <div className="auth-block">
+        {isAdmin && (
+             <button
+             className="burger-button"
+             onClick={onOpenAdmin}
+             style={{ backgroundColor: '#ff4757', color: 'white', marginRight: '8px' }}
+           >
+             ⚙️ Admin
+           </button>
+        )}
         <button
           className="burger-button"
           onClick={onToggleSnapshots}

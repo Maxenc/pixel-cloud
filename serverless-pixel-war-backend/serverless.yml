@@ -3,208 +3,374 @@ frameworkVersion: "4"
 
 custom:
   stage: ${opt:stage, self:provider.stage}
-  pixelTopicName: ${self:service}-${self:custom.stage}-pixel-events
-  snapshotTopicName: ${self:service}-${self:custom.stage}-snapshot-requests
+  # Resource Names
+  pixelTable: ${self:service}-${self:custom.stage}-pixels
+  gameSessionTable: ${self:service}-${self:custom.stage}-game-sessions
+  adminsTable: ${self:service}-${self:custom.stage}-admins
+  snapshotsTable: ${self:service}-${self:custom.stage}-snapshots
+  logsTable: ${self:service}-${self:custom.stage}-logs
+  connectionsTable: ${self:service}-${self:custom.stage}-connections
+  sessionsTable: ${self:service}-${self:custom.stage}-sessions
+  rateLimitTable: ${self:service}-${self:custom.stage}-ratelimit
+  discordSecretName: ${self:service}-${self:custom.stage}-discord-app
+  # SQS Queues
+  drawQueue: ${self:service}-${self:custom.stage}-draw-queue
+  drawQueueDLQ: ${self:service}-${self:custom.stage}-draw-queue-dlq
+  snapshotQueue: ${self:service}-${self:custom.stage}-snapshot-queue
+  snapshotQueueDLQ: ${self:service}-${self:custom.stage}-snapshot-queue-dlq
+
+  # SNS Topics
+  pixelEventsTopic: ${self:service}-${self:custom.stage}-pixel-events
+  snapshotEventsTopic: ${self:service}-${self:custom.stage}-snapshot-events
+  sessionEventsTopic: ${self:service}-${self:custom.stage}-session-events
+  errorCriticalTopic: ${self:service}-${self:custom.stage}-error-critical
+
+  # S3
+  snapshotBucket: ${self:service}-${self:custom.stage}-snapshot-images
 
 provider:
   name: aws
   runtime: nodejs20.x
   region: eu-west-3
   stage: dev
-  websocketsApiName: ${self:service}-${self:provider.stage}-ws
   memorySize: 128
   timeout: 10
   logRetentionInDays: 30
+  environment:
+    STAGE: ${self:custom.stage}
+    REGION: ${self:provider.region}
+    # Tables
+    PIXEL_TABLE: ${self:custom.pixelTable}
+    GAME_SESSION_TABLE: ${self:custom.gameSessionTable}
+    ADMINS_TABLE: ${self:custom.adminsTable}
+    SNAPSHOTS_TABLE: ${self:custom.snapshotsTable}
+    LOGS_TABLE: ${self:custom.logsTable}
+    CONNECTIONS_TABLE: ${self:custom.connectionsTable}
+    SESSIONS_TABLE: ${self:custom.sessionsTable}
+    RATE_LIMIT_TABLE: ${self:custom.rateLimitTable}
+    FRONTEND_URL: "https://d3v8d76h8r7cvq.cloudfront.net"
+    PIXEL_API_BASE_URL:
+      Fn::Join:
+        - ""
+        - - "https://"
+          - { Ref: HttpApi }
+          - ".execute-api."
+          - ${self:provider.region}
+          - ".amazonaws.com"
+    DISCORD_SECRET_NAME: ${self:custom.discordSecretName}
+    # Queues
+    DRAW_QUEUE_URL: !Ref DrawQueue
+    SNAPSHOT_QUEUE_URL: !Ref SnapshotQueue
+    # Topics
+    PIXEL_EVENTS_TOPIC_ARN: !Ref PixelEventsTopic
+    SNAPSHOT_EVENTS_TOPIC_ARN: !Ref SnapshotEventsTopic
+    SESSION_EVENTS_TOPIC_ARN: !Ref SessionEventsTopic
+    ERROR_CRITICAL_TOPIC_ARN: !Ref ErrorCriticalTopic
+    # Buckets
+    SNAPSHOT_IMAGE_BUCKET: ${self:custom.snapshotBucket}
+    # Config
+    BOARD_WIDTH: "256"
+    BOARD_HEIGHT: "256"
+    MAX_PIXELS_PER_MINUTE: "20"
+
   httpApi:
     cors:
       allowedOrigins:
         - "*"
-
-  tracing:
-    lambda: true
-    apiGateway: true
-  logs:
-    http: true
-
-  environment:
-    STAGE: ${self:provider.stage}
-    REGION: ${self:provider.region}
-    PIXEL_TABLE: pixel_canvas
-    RATE_LIMIT_TABLE: pixel_rate_limit
-    SNAPSHOT_IMAGE_BUCKET: ${self:service}-${self:provider.stage}-snapshot-images
-    SNAPSHOT_REQUEST_TOPIC_ARN: arn:aws:sns:${self:provider.region}:${aws:accountId}:${self:custom.snapshotTopicName}
-    PIXEL_QUEUE: pixel-events-queue
-    MAX_PIXELS_PER_MINUTE: "20"
-    LOG_LEVEL: INFO
-    SESSIONS_TABLE: pixel_sessions
-    CONNECTIONS_TABLE: pixel_connections
-    JWT_SECRET: super-secret-jwt-key
-    SNAPSHOT_ADMIN_ID: "285192042693525510"
-    BOARD_WIDTH: "256"
-    BOARD_HEIGHT: "256"
+      allowedMethods:
+        - GET
+        - POST
+        - OPTIONS
+      allowedHeaders:
+        - "*"
 
   iam:
     role:
       statements:
-        # Logs Lambda
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: arn:aws:logs:*:*:*
-        # Table des pixels
-        - Effect: Allow
-          Action:
-            - dynamodb:PutItem
-            - dynamodb:GetItem
-            - dynamodb:Scan
-          Resource:
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.PIXEL_TABLE}
-        # Table de rate-limit
-        - Effect: Allow
-          Action:
-            - dynamodb:UpdateItem
-            - dynamodb:GetItem
-          Resource:
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.RATE_LIMIT_TABLE}
-        # SQS
-        - Effect: Allow
-          Action:
-            - sqs:SendMessage
-            - sqs:ReceiveMessage
-            - sqs:DeleteMessage
-            - sqs:GetQueueAttributes
-          Resource:
-            - arn:aws:sqs:${self:provider.region}:*:${self:provider.environment.PIXEL_QUEUE}
-        # S3 snapshots
-        - Effect: Allow
-          Action:
-            - s3:PutObject
-            - s3:GetObject
-            - s3:ListBucket
-          Resource:
-            - arn:aws:s3:::${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
-            - arn:aws:s3:::${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}/*
-        # X-Ray
         - Effect: Allow
           Action:
             - xray:PutTraceSegments
             - xray:PutTelemetryRecords
           Resource: "*"
-        # Sessions table
-        - Effect: Allow
-          Action:
-            - dynamodb:PutItem
-          Resource:
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.SESSIONS_TABLE}
-        # Connections table
-        - Effect: Allow
-          Action:
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-            - dynamodb:DeleteItem
-            - dynamodb:GetItem
-            - dynamodb:Scan
-          Resource:
-            - arn:aws:dynamodb:${self:provider.region}:*:table/pixel_connections
-        # SNS publish
-        - Effect: Allow
-          Action:
-            - sns:Publish
-          Resource:
-            - arn:aws:sns:${self:provider.region}:*:*
 
-# ======================================================
-# Lambda Functions
-# ======================================================
 functions:
-  proxy:
-    handler: proxy.handler
-    name: ${self:service}-${self:provider.stage}-proxy
+  # ======================================================
+  # Draw Flow
+  # ======================================================
+  drawProxy:
+    handler: src/handlers/draw/proxy.handler
     events:
       - httpApi:
           path: /draw
           method: post
-    environment:
-      QUEUE_URL:
-        Ref: PixelEventsQueue
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource:
+          - !GetAtt SessionsTable.Arn
+          - !GetAtt GameSessionTable.Arn
+          - !GetAtt RateLimitTable.Arn
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt DrawQueue.Arn
 
-  worker:
-    handler: worker.handler
-    name: ${self:service}-${self:provider.stage}-worker
+  drawWorker:
+    handler: src/handlers/draw/worker.handler
     events:
       - sqs:
-          arn:
-            Fn::GetAtt:
-              - PixelEventsQueue
-              - Arn
-    environment:
-      PIXEL_TOPIC_ARN: arn:aws:sns:${self:provider.region}:${aws:accountId}:${self:custom.pixelTopicName}
+          arn: !GetAtt DrawQueue.Arn
+          batchSize: 10
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+        Resource:
+          - !GetAtt PixelTable.Arn
+          - !GetAtt GameSessionTable.Arn
+          - !GetAtt RateLimitTable.Arn
+      - Effect: Allow
+        Action:
+          - sns:Publish
+        Resource: !Ref PixelEventsTopic
 
-  snapshot:
-    handler: snapshot.handler
-    name: ${self:service}-${self:provider.stage}-snapshot
+  # ======================================================
+  # Admin / Session Flow
+  # ======================================================
+  adminSessionPause:
+    handler: src/handlers/admin/pause.handler
     events:
       - httpApi:
-          path: /create_snapshot
+          path: /admin/session/pause
           method: post
-    environment:
-      SNAPSHOT_REQUEST_TOPIC_ARN: ${self:provider.environment.SNAPSHOT_REQUEST_TOPIC_ARN}
-      SNAPSHOT_ADMIN_ID: ${self:provider.environment.SNAPSHOT_ADMIN_ID}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt AdminsTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: !GetAtt GameSessionTable.Arn
+      - Effect: Allow
+        Action:
+          - sns:Publish
+        Resource: !Ref SessionEventsTopic
 
-  snapshotWorker:
-    handler: snapshotWorker.handler
-    name: ${self:service}-${self:provider.stage}-snapshot-worker
-    timeout: 120
+  adminSessionResume:
+    handler: src/handlers/admin/resume.handler
     events:
-      - sns:
-          topicName: ${self:custom.snapshotTopicName}
-    environment:
-      TABLE_NAME: ${self:provider.environment.PIXEL_TABLE}
-      SNAPSHOT_IMAGE_BUCKET: ${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
-      PIXEL_TOPIC_ARN: arn:aws:sns:${self:provider.region}:${aws:accountId}:${self:custom.pixelTopicName}
-      BOARD_WIDTH: ${self:provider.environment.BOARD_WIDTH}
-      BOARD_HEIGHT: ${self:provider.environment.BOARD_HEIGHT}
+      - httpApi:
+          path: /admin/session/resume
+          method: post
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt AdminsTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: !GetAtt GameSessionTable.Arn
+      - Effect: Allow
+        Action:
+          - sns:Publish
+        Resource: !Ref SessionEventsTopic
+
+  adminSnapshotTrigger:
+    handler: src/handlers/admin/snapshotTrigger.handler
+    events:
+      - httpApi:
+          path: /admin/snapshots
+          method: post
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt AdminsTable.Arn
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt SnapshotQueue.Arn
+
+  # ======================================================
+  # Snapshot Flow
+  # ======================================================
+  snapshotWorker:
+    handler: src/handlers/snapshot/worker.handler
+    timeout: 60
+    events:
+      - sqs:
+          arn: !GetAtt SnapshotQueue.Arn
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Scan
+          - dynamodb:Query
+        Resource: !GetAtt PixelTable.Arn
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+        Resource: arn:aws:s3:::${self:custom.snapshotBucket}/*
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: !GetAtt SnapshotsTable.Arn
+      - Effect: Allow
+        Action:
+          - sns:Publish
+        Resource: !Ref SnapshotEventsTopic
 
   snapshotsList:
-    handler: snapshotsList.handler
-    name: ${self:service}-${self:provider.stage}-snapshots-list
+    handler: src/handlers/snapshot/list.handler
     events:
       - httpApi:
           path: /snapshots
           method: get
-    environment:
-      SNAPSHOT_IMAGE_BUCKET: ${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Scan
+        Resource: !GetAtt SnapshotsTable.Arn
 
-  health:
-    handler: proxy.handler
-    name: ${self:service}-${self:provider.stage}-health
-    events:
-      - httpApi:
-          path: /health
-          method: get
-
-  stats:
-    handler: proxy.handler
-    name: ${self:service}-${self:provider.stage}-stats
-    events:
-      - httpApi:
-          path: /stats
-          method: get
-
+  # ======================================================
+  # View / Read
+  # ======================================================
   view:
-    handler: view.handler
-    name: ${self:service}-${self:provider.stage}-view
+    handler: src/handlers/view.handler
     events:
       - httpApi:
           path: /view
           method: get
-    environment:
-      CONNECTIONS_TABLE: pixel_connections
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Scan
+        Resource: !GetAtt PixelTable.Arn
 
+  state:
+    handler: src/handlers/state.handler
+    events:
+      - httpApi:
+          path: /state
+          method: get
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt GameSessionTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:Scan
+        Resource:
+          - !GetAtt ConnectionsTable.Arn
+          - !GetAtt SnapshotsTable.Arn
+
+  # ======================================================
+  # Realtime / WebSocket
+  # ======================================================
+  wsConnect:
+    handler: src/handlers/realtime/wsConnect.handler
+    events:
+      - websocket:
+          route: $connect
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+        Resource:
+          - !GetAtt ConnectionsTable.Arn
+          - !Sub "${ConnectionsTable.Arn}/index/clientIdIndex"
+
+  wsDisconnect:
+    handler: src/handlers/realtime/wsDisconnect.handler
+    events:
+      - websocket:
+          route: $disconnect
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource: !GetAtt ConnectionsTable.Arn
+
+  broadcast:
+    handler: src/handlers/realtime/broadcast.handler
+    environment:
+      WEBSOCKET_API_ENDPOINT:
+        !Join [
+          "",
+          [
+            "https://",
+            !Ref WebsocketsApi,
+            ".execute-api.",
+            "${self:provider.region}",
+            ".amazonaws.com/",
+            "${self:provider.stage}",
+          ],
+        ]
+    events:
+      - sns:
+          arn: !Ref PixelEventsTopic
+          topicName: ${self:custom.pixelEventsTopic}
+      - sns:
+          arn: !Ref SnapshotEventsTopic
+          topicName: ${self:custom.snapshotEventsTopic}
+      - sns:
+          arn: !Ref SessionEventsTopic
+          topicName: ${self:custom.sessionEventsTopic}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Scan
+          - dynamodb:DeleteItem
+        Resource: !GetAtt ConnectionsTable.Arn
+      - Effect: Allow
+        Action:
+          - execute-api:ManageConnections
+        Resource:
+          - arn:aws:execute-api:${self:provider.region}:*:*/*/POST/@connections/*
+
+  # ======================================================
+  # Discord Integration
+  # ======================================================
+  discordInteractions:
+    handler: src/handlers/discord/interactions.handler
+    events:
+      - httpApi:
+          path: /discord/interactions
+          method: post
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - secretsmanager:GetSecretValue
+        Resource:
+          - arn:aws:secretsmanager:${self:provider.region}:${aws:accountId}:secret:${self:custom.discordSecretName}*
+
+  discordWebhook:
+    handler: src/handlers/discord/webhook.handler
+    events:
+      - sns:
+          arn: !Ref SnapshotEventsTopic
+          topicName: ${self:custom.snapshotEventsTopic}
+    # Needs access to secrets for Discord Webhook URL (store in SSM/SecretsManager usually, but env for now if simple)
+    # Assuming we use SSM or environment variables injected securely.
+    # Adding basic logging permissions only here as it just calls external API.
+
+  # ======================================================
+  # Auth
+  # ======================================================
   auth:
-    handler: auth.handler
+    handler: src/handlers/auth.handler
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -213,85 +379,127 @@ functions:
       - Effect: Allow
         Action:
           - dynamodb:PutItem
-        Resource:
-          - arn:aws:dynamodb:eu-west-3:326120905293:table/${self:provider.environment.SESSIONS_TABLE}
-    name: ${self:service}-${self:provider.stage}-auth
+        Resource: !GetAtt SessionsTable.Arn
     events:
       - httpApi:
           path: /auth
           method: any
 
-  wsConnect:
-    handler: wsConnect.handler
-    events:
-      - websocket:
-          route: $connect
-    environment:
-      CONNECTIONS_TABLE: pixel_connections
-
-  wsDisconnect:
-    handler: wsDisconnect.handler
-    events:
-      - websocket:
-          route: $disconnect
-    environment:
-      CONNECTIONS_TABLE: pixel_connections
-
-  broadcast:
-    handler: broadcast.handler
-    events:
-      - sns:
-          topicName: ${self:custom.pixelTopicName}
-    environment:
-      CONNECTIONS_TABLE: pixel_connections
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - dynamodb:Scan
-          - dynamodb:DeleteItem
-        Resource:
-          - arn:aws:dynamodb:${self:provider.region}:*:table/pixel_connections
-      - Effect: Allow
-        Action:
-          - execute-api:ManageConnections
-        Resource:
-          - arn:aws:execute-api:${self:provider.region}:*:*/*/POST/@connections/*
-
-# ======================================================
-# Resources : sqs dynamodb S3
-# ======================================================
 resources:
   Resources:
-    PixelEventsQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: ${self:provider.environment.PIXEL_QUEUE}
-        VisibilityTimeout: 30
-
+    # ================== DynamoDB Tables ==================
     PixelTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: ${self:provider.environment.PIXEL_TABLE}
+        TableName: ${self:custom.pixelTable}
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: pixel_id
+          - AttributeName: canvasId
+            AttributeType: S
+          - AttributeName: pixelId
             AttributeType: S
         KeySchema:
-          - AttributeName: pixel_id
+          - AttributeName: canvasId
             KeyType: HASH
+          - AttributeName: pixelId
+            KeyType: RANGE
 
-    PixelRateLimitTable:
+    GameSessionTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: ${self:provider.environment.RATE_LIMIT_TABLE}
+        TableName: ${self:custom.gameSessionTable}
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: user_id
+          - AttributeName: canvasId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: canvasId
+            KeyType: HASH
+
+    AdminsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.adminsTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: discordUserId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: discordUserId
+            KeyType: HASH
+
+    SnapshotsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.snapshotsTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: snapshotId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: snapshotId
+            KeyType: HASH
+
+    LogsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.logsTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: logId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: logId
+            KeyType: HASH
+
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.connectionsTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+          - AttributeName: clientId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: clientIdIndex
+            KeySchema:
+              - AttributeName: clientId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    SessionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.sessionsTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: sessionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: sessionId
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: expiresAt
+          Enabled: true
+
+    RateLimitTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.rateLimitTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
             AttributeType: S
           - AttributeName: bucket
             AttributeType: S
         KeySchema:
-          - AttributeName: user_id
+          - AttributeName: userId
             KeyType: HASH
           - AttributeName: bucket
             KeyType: RANGE
@@ -299,16 +507,67 @@ resources:
           AttributeName: ttl
           Enabled: true
 
+    # ================== SQS Queues ==================
+    DrawQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.drawQueueDLQ}
+        MessageRetentionPeriod: 1209600 # 14 days
+
+    DrawQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.drawQueue}
+        VisibilityTimeout: 30
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DrawQueueDLQ.Arn
+          maxReceiveCount: 3
+
+    SnapshotQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.snapshotQueueDLQ}
+        MessageRetentionPeriod: 1209600
+
+    SnapshotQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.snapshotQueue}
+        VisibilityTimeout: 120
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SnapshotQueueDLQ.Arn
+          maxReceiveCount: 3
+
+    # ================== SNS Topics ==================
+    PixelEventsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:custom.pixelEventsTopic}
+
+    SnapshotEventsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:custom.snapshotEventsTopic}
+
+    SessionEventsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:custom.sessionEventsTopic}
+
+    ErrorCriticalTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:custom.errorCriticalTopic}
+
+    # ================== S3 Bucket ==================
     SnapshotImageBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}
-        VersioningConfiguration:
-          Status: Enabled
+        BucketName: ${self:custom.snapshotBucket}
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
           IgnorePublicAcls: true
-          BlockPublicPolicy: false
+          BlockPublicPolicy: false # Needed for policy below
           RestrictPublicBuckets: false
         CorsConfiguration:
           CorsRules:
@@ -316,7 +575,6 @@ resources:
                 - "*"
               AllowedMethods:
                 - GET
-                - HEAD
               AllowedHeaders:
                 - "*"
               MaxAge: 300
@@ -331,33 +589,35 @@ resources:
             - Sid: AllowPublicRead
               Effect: Allow
               Principal: "*"
-              Action:
-                - s3:GetObject
-              Resource: arn:aws:s3:::${self:provider.environment.SNAPSHOT_IMAGE_BUCKET}/*
+              Action: "s3:GetObject"
+              Resource: !Sub "arn:aws:s3:::${SnapshotImageBucket}/*"
 
-    SessionsTable:
-      Type: AWS::DynamoDB::Table
+    # ================== EventBridge ==================
+    DailySnapshotRule:
+      Type: AWS::Events::Rule
       Properties:
-        TableName: ${self:provider.environment.SESSIONS_TABLE}
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: sessionId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: sessionId
-            KeyType: HASH
-        TimeToLiveSpecification:
-          AttributeName: expiresAt
-          Enabled: true
+        Name: ${self:service}-${self:custom.stage}-daily-snapshot
+        ScheduleExpression: "cron(0 12 * * ? *)" # 12:00 PM UTC daily
+        State: ENABLED
+        Targets:
+          - Id: TriggerSnapshotQueue
+            Arn: !GetAtt SnapshotQueue.Arn
+            Input: '{"canvasId": "main", "triggeredBy": "system-daily"}'
 
-    ConnectionsTable:
-      Type: AWS::DynamoDB::Table
+    # Allow EventBridge to push to SQS
+    EventBridgeToSnapshotQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
       Properties:
-        TableName: pixel_connections
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: connectionId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: connectionId
-            KeyType: HASH
+        Queues:
+          - !Ref SnapshotQueue
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sqs:SendMessage
+              Resource: !GetAtt SnapshotQueue.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !GetAtt DailySnapshotRule.Arn

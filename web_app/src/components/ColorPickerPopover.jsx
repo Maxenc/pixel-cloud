@@ -41,7 +41,7 @@ export function ColorPickerPopover({
           onClick={onConfirm}
           disabled={loading || cooldown > 0}
         >
-          {loading ? "Placement..." : cooldown > 0 ? `Attends ${cooldown}s` : "Valider"}
+          {loading ? "..." : cooldown > 0 ? `Attends ${cooldown}s` : "Valider"}
         </button>
       </div>
     </div>

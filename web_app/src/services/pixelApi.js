@@ -36,11 +36,31 @@ export class PixelApi {
   }
 
   async getPixelMeta(x, y) {
-    return this.#request(`/pixels/${x}/${y}`);
+    return {
+      x,
+      y,
+      color: "#000000",
+      author: "loading...",
+      updated_at: new Date().toISOString(),
+    };
   }
 
   async requestSnapshot(userId) {
-    return this.#request("/create_snapshot", {
+    return this.#request("/admin/snapshots", {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async pauseGame(userId) {
+    return this.#request("/admin/session/pause", {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async resumeGame(userId) {
+    return this.#request("/admin/session/resume", {
       method: "POST",
       body: JSON.stringify({ userId }),
     });
@@ -48,6 +68,10 @@ export class PixelApi {
 
   async getSnapshots() {
     return this.#request("/snapshots");
+  }
+
+  async getGameState() {
+    return this.#request("/state");
   }
 
   async #request(path, options = {}) {
@@ -60,13 +84,29 @@ export class PixelApi {
     if (this.#sessionId) headers.Authorization = `Bearer ${this.#sessionId}`;
 
     const response = await fetch(url, { ...options, headers });
-    const isJson = response.headers
-      .get("content-type")
-      ?.includes("application/json");
-    const payload = isJson ? await response.json().catch(() => null) : null;
+    const contentType = response.headers.get("content-type") || "";
+    const rawBody = await response.text();
+    let payload = null;
+
+    if (rawBody) {
+      const parseJson = () => {
+        try {
+          return JSON.parse(rawBody);
+        } catch {
+          return rawBody;
+        }
+      };
+
+      if (contentType.toLowerCase().includes("application/json")) {
+        payload = parseJson();
+      } else {
+        payload = parseJson();
+      }
+    }
 
     if (!response.ok) {
-      const message = payload?.message || `API ${response.status}`;
+      const message =
+        payload?.error || payload?.message || `API ${response.status}`;
       throw new Error(message);
     }
 

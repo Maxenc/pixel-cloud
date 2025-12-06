@@ -8,6 +8,8 @@ import { CanvasStage } from "./components/CanvasStage";
 import { PixelInfoCard } from "./components/PixelInfoCard";
 import { ColorPickerPopover } from "./components/ColorPickerPopover";
 import { StatusToast } from "./components/StatusToast";
+import { AdminPanel } from "./components/AdminPanel";
+import { GameStatePanel } from "./components/GameStatePanel";
 import { SnapshotDrawer } from "./components/SnapshotDrawer";
 import { extractSessionDataFromUrl } from "./utils/oauth";
 
@@ -16,10 +18,19 @@ export default function App() {
   const wsRef = useRef(null);
   const canvasRef = useRef(null);
   const refreshSnapshotRef = useRef(null);
+  const lastGameStateSyncRef = useRef(0);
   const [snapshot, setSnapshot] = useState(blankSnapshot);
-  const [clientId, setClientId] = useState(() => {
+  const [clientId] = useState(() => {
     if (typeof window === "undefined") return null;
-    return window.localStorage.getItem("pixel_client_id");
+    const existing = window.localStorage.getItem("pixel_client_id");
+    if (existing) return existing;
+    const generated =
+      (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
+      `client-${Date.now().toString(36)}-${Math.random()
+        .toString(16)
+        .slice(2, 8)}`;
+    window.localStorage.setItem("pixel_client_id", generated);
+    return generated;
   });
   const [user, setUserState] = useState(() => {
     if (typeof window === "undefined") return null;
@@ -43,6 +54,11 @@ export default function App() {
   const [snapshots, setSnapshots] = useState([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
   const [requestingSnapshot, setRequestingSnapshot] = useState(false);
+  const [gameState, setGameState] = useState(null);
+  const [loadingGameState, setLoadingGameState] = useState(false);
+
+  const [isPaused, setIsPaused] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const quickPalette = colorPalette.slice(0, 8);
   const cooldownDuration = appConfig.rateLimit?.windowSeconds ?? 60;
@@ -56,7 +72,7 @@ export default function App() {
     return () => clearInterval(id);
   }, [cooldown]);
 
-  const canPlacePixel = Boolean(user) && cooldown === 0;
+  const canPlacePixel = Boolean(user) && cooldown === 0 && !isPaused;
   const isAdmin = user?.id === appConfig.snapshotAdminId;
 
   const notifyCooldown = () => {
@@ -82,13 +98,45 @@ export default function App() {
     }
   }, [api]);
 
+  const refreshGameState = useCallback(
+    async (silent = true) => {
+      setLoadingGameState(true);
+      try {
+        const data = await api.getGameState();
+        setGameState(data);
+      } catch (error) {
+        console.error("Game state fetch error", error);
+        if (!silent) {
+          setStatus({
+            type: "error",
+            message: "Impossible de récupérer l'état du jeu.",
+          });
+        }
+      } finally {
+        setLoadingGameState(false);
+      }
+    },
+    [api, setStatus]
+  );
+
+  const syncGameStateFromServer = useCallback(
+    (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastGameStateSyncRef.current < 5000) {
+        return;
+      }
+      lastGameStateSyncRef.current = now;
+      refreshGameState(true);
+    },
+    [refreshGameState]
+  );
+
   const handleSnapshotReady = useCallback(
     (payload) => {
       setStatus({
         type: "success",
         message: "Nouvelle snapshot disponible.",
       });
-      setSnapshotsOpen(true);
       loadSnapshots();
     },
     [loadSnapshots]
@@ -129,6 +177,7 @@ export default function App() {
         index,
         color: nextColor,
         user: pixel.user ?? "inconnu",
+        username: pixel.username ?? "inconnu",
         timestamp: pixel.timestamp ?? new Date().toISOString(),
         x: fallbackX,
         y: fallbackY,
@@ -140,7 +189,7 @@ export default function App() {
       return {
         ...prev,
         color: nextColor,
-        author: pixel.user ?? prev.author,
+        author: pixel.username ?? prev.author,
         updated_at: pixel.timestamp ?? new Date().toISOString(),
       };
     });
@@ -153,44 +202,83 @@ export default function App() {
     }
   }, []);
 
-  const openLiveConnection = useCallback(
-    (connId) => {
-      if (!connId || !appConfig.wsBaseUrl) return;
-      closeLiveConnection();
-      const params = new URLSearchParams();
-      params.append("clientId", connId);
-      if (api.token) params.append("sessionId", api.token);
-      const socket = new WebSocket(
-        `${appConfig.wsBaseUrl}?${params.toString()}`
-      );
-      wsRef.current = socket;
+  const openLiveConnection = useCallback(() => {
+    if (!appConfig.wsBaseUrl) return;
+    closeLiveConnection();
+    const params = new URLSearchParams();
+    if (clientId) params.append("clientId", clientId);
+    if (api.token) params.append("sessionId", api.token);
 
-      socket.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message?.type === "pixel" && message.payload) {
-            applyPixelUpdate(message.payload);
-          } else if (message?.type === "snapshot_ready") {
-            handleSnapshotReady(message.payload);
-          }
-        } catch (error) {
-          console.warn("Message WebSocket invalide", error);
+    const socket = new WebSocket(`${appConfig.wsBaseUrl}?${params.toString()}`);
+    wsRef.current = socket;
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        if (
+          message?.type === "pixel.drawn" ||
+          (message?.type === "pixel" && message.payload)
+        ) {
+          const p = message.payload || message;
+          applyPixelUpdate(p);
+          setGameState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  pixelCount: Math.max(0, (prev.pixelCount ?? 0) + 1),
+                }
+              : prev
+          );
+          syncGameStateFromServer();
+        } else if (message?.type === "snapshot.ready") {
+          handleSnapshotReady(message);
+        } else if (message?.type === "session.paused") {
+          setIsPaused(true);
+          setStatus({
+            type: "warning",
+            message: "Session mise en pause par un admin.",
+          });
+          setGameState((prev) => (prev ? { ...prev, status: "PAUSED" } : prev));
+          syncGameStateFromServer(true);
+        } else if (message?.type === "session.resumed") {
+          setIsPaused(false);
+          setStatus({
+            type: "success",
+            message: "Session reprise ! À vos pixels !",
+          });
+          setGameState((prev) =>
+            prev ? { ...prev, status: "RUNNING" } : prev
+          );
+          syncGameStateFromServer(true);
         }
-      };
+      } catch (error) {
+        console.warn("Message WebSocket invalide", error);
+      }
+    };
 
-      socket.onclose = () => {
-        wsRef.current = null;
-      };
-    },
-    [applyPixelUpdate, closeLiveConnection, handleSnapshotReady]
-  );
+    socket.onclose = () => {
+      wsRef.current = null;
+    };
+  }, [
+    api.token,
+    applyPixelUpdate,
+    clientId,
+    closeLiveConnection,
+    handleSnapshotReady,
+    syncGameStateFromServer,
+  ]);
+
+  useEffect(() => {
+    openLiveConnection();
+    return () => closeLiveConnection();
+  }, [openLiveConnection, closeLiveConnection]);
 
   const refreshSnapshot = useCallback(
     async (silent = false) => {
       if (!silent) setLoadingSnapshot(true);
       try {
         const data = await api.getSnapshot({
-          clientId,
           sessionId: api.token ?? null,
         });
         const pixels = (data?.pixels ?? [])
@@ -208,6 +296,7 @@ export default function App() {
               index,
               color: pixel.color ?? "#000000",
               user: pixel.user ?? "inconnu",
+              username: pixel.username ?? "inconnu",
               timestamp: pixel.timestamp ?? new Date().toISOString(),
               x: pixel.x,
               y: pixel.y,
@@ -216,20 +305,6 @@ export default function App() {
           .filter(Boolean);
 
         setSnapshot({ ...blankSnapshot, pixels });
-        if (data?.connectionId) {
-          setClientId((prev) => {
-            if (prev !== data.connectionId) {
-              if (typeof window !== "undefined") {
-                window.localStorage.setItem(
-                  "pixel_client_id",
-                  data.connectionId
-                );
-              }
-              openLiveConnection(data.connectionId);
-            }
-            return data.connectionId;
-          });
-        }
       } catch (error) {
         console.error("Snapshot error", error);
         setStatus({
@@ -240,7 +315,7 @@ export default function App() {
         if (!silent) setLoadingSnapshot(false);
       }
     },
-    [api, clientId, openLiveConnection]
+    [api]
   );
   refreshSnapshotRef.current = refreshSnapshot;
 
@@ -249,26 +324,24 @@ export default function App() {
       const current = snapshot.pixels.find(
         (p) => typeof p?.x === "number" && p.x === x && p.y === y
       );
-
       setPixelMeta(
         current
           ? {
               x,
               y,
               color: current.color ?? "#000000",
-              author: current.user ?? "inconnu",
+              author: current.username ?? "inconnu",
               updated_at: current.timestamp ?? new Date().toISOString(),
             }
-          : buildMockMeta(x, y, null) // Pass null color for empty pixel
+          : buildMockMeta(x, y, null)
       );
     },
-    [snapshot, currentColor]
+    [snapshot]
   );
 
   const handleSelectPixel = useCallback(
     ({ x, y }) => {
       if (x === undefined || y === undefined || x === null || y === null) {
-        // Deselection logic
         setSelectedPixel(null);
         setPixelAnchor(null);
         setShowPalette(false);
@@ -293,6 +366,10 @@ export default function App() {
       startDiscordLogin();
       return;
     }
+    if (isPaused) {
+      setStatus({ type: "warning", message: "Le jeu est en pause." });
+      return;
+    }
     if (cooldown > 0) {
       notifyCooldown();
       return;
@@ -314,25 +391,17 @@ export default function App() {
         x: selectedPixel.x,
         y: selectedPixel.y,
         color: currentColor,
-        user: user?.username ?? "n/a",
+        userId: user?.id,
+        username: user?.username,
       });
       setCooldown(cooldownDuration);
-      setPixelMeta({
-        x: selectedPixel.x,
-        y: selectedPixel.y,
-        color: currentColor,
-        author: user?.username ?? "n/a",
-        updated_at: new Date().toISOString(),
-      });
-      setStatus({ type: "success", message: "Pixel posé avec succès." });
-      setTimeout(() => setStatus(null), 3000);
-      await refreshSnapshot(true);
+      setStatus({ type: "success", message: "Pixel envoyé..." });
       setShowPalette(false);
     } catch (error) {
       console.error("Placement KO", error);
       setStatus({
         type: "error",
-        message: "Impossible de placer le pixel.",
+        message: error.message || "Impossible de placer le pixel.",
       });
     } finally {
       setPlacingPixel(false);
@@ -342,13 +411,7 @@ export default function App() {
   const handleCancelPlacement = () => setShowPalette(false);
 
   const handleRequestSnapshot = useCallback(async () => {
-    if (!user || !isAdmin) {
-      setStatus({
-        type: "error",
-        message: "Tu n'as pas les droits pour lancer une snapshot.",
-      });
-      return;
-    }
+    if (!user || !isAdmin) return;
     setSnapshotsOpen(true);
     setRequestingSnapshot(true);
     try {
@@ -356,6 +419,7 @@ export default function App() {
       setStatus({
         type: "success",
         message: "Snapshot en cours de génération...",
+        duration: 6000,
       });
     } catch (error) {
       console.error("Snapshot request error", error);
@@ -367,6 +431,35 @@ export default function App() {
       setRequestingSnapshot(false);
     }
   }, [api, user, isAdmin]);
+
+  const handlePauseGame = async () => {
+    try {
+      await api.pauseGame(user.id);
+      setStatus({ type: "success", message: "Pause demandée." });
+    } catch (e) {
+      setStatus({ type: "error", message: e.message });
+    }
+  };
+
+  const handleResumeGame = async () => {
+    try {
+      await api.resumeGame(user.id);
+      setStatus({ type: "success", message: "Reprise demandée." });
+    } catch (e) {
+      setStatus({ type: "error", message: e.message });
+    }
+  };
+
+  useEffect(() => {
+    if (!status?.type) return undefined;
+    const duration =
+      typeof status.duration === "number" ? status.duration : 4000;
+    if (duration <= 0 || Number.isNaN(duration)) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setStatus(null), duration);
+    return () => clearTimeout(timer);
+  }, [status]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -384,12 +477,15 @@ export default function App() {
       await refreshSnapshotRef.current?.();
     };
     bootstrap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, persistUser]);
 
   useEffect(() => {
     loadSnapshots();
   }, [loadSnapshots]);
+
+  useEffect(() => {
+    refreshGameState();
+  }, [refreshGameState]);
 
   const handleLogout = useCallback(() => {
     api.setToken(null);
@@ -397,13 +493,6 @@ export default function App() {
     closeLiveConnection();
     setCooldown(0);
   }, [api, persistUser, closeLiveConnection]);
-
-  useEffect(
-    () => () => {
-      closeLiveConnection();
-    },
-    [closeLiveConnection]
-  );
 
   return (
     <div className="app-shell">
@@ -413,12 +502,37 @@ export default function App() {
         onLogout={handleLogout}
         onToggleSnapshots={() => setSnapshotsOpen((prev) => !prev)}
         snapshotsOpen={snapshotsOpen}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => {
+          setShowAdminPanel(true);
+          refreshGameState(false);
+        }}
       />
+
+      {showAdminPanel && isAdmin && (
+        <AdminPanel
+          isPaused={isPaused}
+          onPause={handlePauseGame}
+          onResume={handleResumeGame}
+          onRequestSnapshot={handleRequestSnapshot}
+          onClose={() => setShowAdminPanel(false)}
+        />
+      )}
+
       {cooldown > 0 && (
         <div className="rate-limit-banner">
           Encore {cooldown}s avant de pouvoir rejouer.
         </div>
       )}
+      {isPaused && (
+        <div
+          className="rate-limit-banner"
+          style={{ backgroundColor: "#e74c3c" }}
+        >
+          ⏸️ PAUSED
+        </div>
+      )}
+
       <section className="canvas-section">
         <CanvasStage
           ref={canvasRef}
@@ -458,6 +572,11 @@ export default function App() {
             {loadingSnapshot ? "..." : "Refresh"}
           </button>
         </div>
+        <GameStatePanel
+          gameState={gameState}
+          loading={loadingGameState}
+          onRefresh={() => refreshGameState(false)}
+        />
       </section>
 
       <PixelInfoCard

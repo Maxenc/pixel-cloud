@@ -60,13 +60,9 @@ export const CanvasStage = forwardRef(function CanvasStage(
       const x = index % width;
       const y = Math.floor(index / width);
       ctx.fillStyle = color ?? "#000000";
-      // Draw with a small gap to create a border effect
-      // Using 0.9 size centered (offset 0.05) creates a gap
-      // To make the grid lines visible (grey), we can rely on the background color #0f172a
-      // or draw a stroke. Let's use stroke for a subtle grey grid.
-      ctx.fillRect(x, y, 1, 1); // Fill full pixel first
+      ctx.fillRect(x, y, 1, 1);
       ctx.lineWidth = 0.05;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)"; // Subtle grey/white stroke
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
       ctx.strokeRect(x, y, 1, 1);
     });
   }, [snapshot]);
@@ -107,7 +103,6 @@ export const CanvasStage = forwardRef(function CanvasStage(
         y: viewport.height / 2,
       };
       const prevPan = panRef.current;
-      // Use target zoom for world coordinate calculation to ensure precision
       const worldX = (pointer.x - prevPan.x) / prevZoom;
       const worldY = (pointer.y - prevPan.y) / prevZoom;
 
@@ -150,28 +145,21 @@ export const CanvasStage = forwardRef(function CanvasStage(
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    // Calculate scale based on actual rendered size vs logic size
     const scaleX = baseWidth / rect.width;
     const scaleY = baseHeight / rect.height;
 
-    // Add a small epsilon to handle floating point inaccuracies (e.g. 9.9999 -> 10)
-    // This prevents selecting the previous pixel due to minute sub-pixel offsets
     const EPSILON = 0.05;
     const x = Math.floor((clientX - rect.left) * scaleX + EPSILON);
     const y = Math.floor((clientY - rect.top) * scaleY + EPSILON);
 
     if (x < 0 || y < 0 || x >= baseWidth || y >= baseHeight) {
-      // Clicked outside the board -> deselect
       onSelect?.(null);
       return;
     }
     onSelect?.({ x, y });
 
-    // Auto-center on the selected pixel
     const viewport = viewportRef.current?.getBoundingClientRect();
     if (viewport) {
-      // Important: use current zoom state, not targetZoom constant
-      // and calculate center based on the precise pixel center
       setPan({
         x: viewport.width / 2 - (x + 0.5) * zoom,
         y: viewport.height / 2 - (y + 0.5) * zoom,
@@ -215,9 +203,7 @@ export const CanvasStage = forwardRef(function CanvasStage(
     dragRef.current.pointerId = null;
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      /* no-op */
-    }
+    } catch {}
     if (!dragRef.current.moved && !cancelled) {
       selectAt(event.clientX, event.clientY);
     }
