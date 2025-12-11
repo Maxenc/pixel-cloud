@@ -34,6 +34,11 @@ Le projet repose sur une architecture **Event-Driven Serverless** optimisée pou
 2. **Lecture (Read Path)** :
    `Client` → `API Gateway` → `Lambda` → `DynamoDB (Scan/Query)`.
 
+### 📑 Diagramme Architecture des différents services et workflows (AWS)
+
+   <img width="1704" height="1737" alt="image" src="https://github.com/user-attachments/assets/7217ca15-4b14-4fdf-a385-cdf55569b834" />
+
+
 ---
 
 ## 📂 Structure du Monorepo
