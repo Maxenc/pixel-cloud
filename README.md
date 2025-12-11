@@ -1,75 +1,121 @@
 # Pixel Cloud
 
-**Pixel Cloud** is a serverless, real-time collaborative canvas application (inspired by Reddit's r/place). Users can place colored pixels on a shared 256x256 board, with changes broadcasting instantly to all connected clients.
+**Pixel Cloud** est une application canvas collaborative en temps réel (inspirée de r/place), entièrement Serverless et construite sur AWS.
 
-## 🌟 Features
+Ce projet permet aux utilisateurs authentifiés via Discord de placer des pixels sur une grille partagée de 256x256, avec des mises à jour diffusées instantanément à tous les clients connectés via WebSockets.
 
-- **Real-time Collaboration**: WebSocket-based updates ensure users see changes as they happen.
-- **Serverless Architecture**: Built entirely on AWS Serverless (Lambda, DynamoDB, API Gateway) for infinite scaling and zero maintenance.
-- **Discord Authentication**: Secure login via Discord OAuth2.
-- **Interactive UI**: Fast, responsive React frontend.
-- **Admin Tools**: Snapshot generation, board moderation tools.
-- **Production Ready**:
-  - **Cost Optimized**: ARM64 compute, S3 lifecycle policies, and budget alerts.
-  - **Secure**: Strict Content Security Policy (CSP), CORS, and rate limiting.
+---
 
-## 📂 Project Structure
+## 🏗 Architecture Technique
 
-This monorepo contains two main packages:
+Le projet repose sur une architecture **Event-Driven Serverless** optimisée pour la performance et le coût.
 
-- **[`serverless-pixel-war-backend/`](./serverless-pixel-war-backend)**: The Node.js backend infrastructure defined with Serverless Framework. Handles APIs, WebSockets, database, and background workers.
-- **[`web_app/`](./web_app)**: The React frontend (Vite) deployed to AWS CloudFront + S3 via `serverless-finch`.
+### 🧱 Composants Core (AWS)
 
-## 🚀 Getting Started
+- **Compute** : AWS Lambda (Node.js 20, ARM64/Graviton2 pour l'optimisation des coûts).
+- **API** :
+  - **HTTP API (v2)** : Pour les commandes REST (`/draw`, `/auth`, `/state`).
+  - **WebSocket API** : Pour le temps réel (connexions persistantes).
+- **Base de Données** : DynamoDB (On-Demand).
+  - `Pixels` : État actuel de la grille (PK: CanvasId, SK: PixelId).
+  - `Sessions` : Sessions utilisateurs (TTL activé).
+  - `Connections` : Suivi des clients WebSocket actifs.
+  - `RateLimit` : Gestion du cooldown des utilisateurs.
+- **Messaging & Async** :
+  - **SQS** : Buffer d'écriture pour l'endpoint `/draw` afin d'absorber les pics de charge (lissage du trafic vers DynamoDB).
+  - **SNS** : Bus d'événements interne pour diffuser les mises à jour (`pixel.drawn`, `session.paused`) aux workers WebSocket et autres consommateurs.
+- **Stockage** : S3 (Stockage des snapshots PNG générés).
+- **Hosting Frontend** : S3 + CloudFront (CDN) + OAI (Origin Access Identity).
 
-### Prerequisites
+### 🔄 Flux de Données
 
-- Node.js 20+
-- AWS Account and CLI configured
-- Discord Developer Application (for Auth)
+1. **Dessin (Write Path)** :
+   `Client` → `API Gateway` → `Lambda (Proxy)` → `SQS` → `Lambda (Worker)` → `DynamoDB` → `SNS` → `Lambda (Broadcast)` → `WebSocket` → `Tous les Clients`.
+2. **Lecture (Read Path)** :
+   `Client` → `API Gateway` → `Lambda` → `DynamoDB (Scan/Query)`.
 
-### 1. Deploy the Backend
+---
 
-Navigate to the backend directory and deploy the stack:
-
-```bash
-cd serverless-pixel-war-backend
-npm install
-npx serverless deploy --stage dev
-```
-
-_Note the `HttpApiUrl` and `WebSocketUrl` from the output._
-
-### 2. Configure & Deploy the Frontend
-
-Navigate to the web app directory:
+## 📂 Structure du Monorepo
 
 ```bash
-cd web_app
-npm install
+/
+├── serverless-pixel-war-backend/  # Infrastructure Backend (Serverless Framework)
+│   ├── src/
+│   │   ├── handlers/             # Lambdas (Draw, Auth, Realtime, Admin)
+│   │   ├── utils/                # Helpers AWS & Business Logic
+│   │   └── ...
+│   ├── serverless.yml            # Définition IaC (AWS CloudFormation)
+│   └── package.json
+│
+├── web_app/                       # Frontend SPA (React + Vite)
+│   ├── src/
+│   │   ├── components/           # Composants UI (Canvas, AdminPanel...)
+│   │   ├── services/             # API Clients
+│   │   └── config.js             # Configuration des endpoints
+│   ├── serverless.yml            # Définition déploiement Frontend (S3+CloudFront)
+│   └── ...
+└── discord-example-app/           # (Optionnel) Bot Discord compagnon
 ```
 
-Update `src/config.js` or environment variables with your deployed Backend URLs.
+---
 
-Build and deploy to S3/CloudFront:
+## 🚀 Guide de Déploiement
 
-```bash
-npm run build
-npx serverless client deploy --stage dev
-```
+### Prérequis
 
-## 🛠 Tech Stack
+- **Node.js 20+**
+- **AWS CLI** configuré avec des droits administrateur.
+- **Serverless Framework v4** : `npm install -g serverless`
+- **Application Discord** : Créez une application sur le [Discord Developer Portal](https://discord.com/developers/applications) pour obtenir `CLIENT_ID` et `CLIENT_SECRET`.
 
-- **Frontend**: React, Vite, Canvas API.
-- **Backend**: Node.js, Serverless Framework.
-- **AWS Services**:
-  - **Compute**: Lambda (ARM64)
-  - **API**: API Gateway (HTTP & WebSocket)
-  - **Database**: DynamoDB
-  - **Storage**: S3
-  - **Queues/Events**: SQS, SNS, EventBridge
-  - **CDN**: CloudFront
+### 1. Backend
 
-## 📄 License
+1. **Secrets AWS** : Créez un secret dans AWS Secrets Manager (région `eu-west-3` par défaut) nommé `pixel-cloud-discord-app` contenant :
 
-This project is open source.
+   ```json
+   {
+     "client_id": "VOTRE_CLIENT_ID",
+     "client_secret": "VOTRE_CLIENT_SECRET"
+   }
+   ```
+
+   _(Note : Le nom du secret doit correspondre au pattern défini dans `serverless.yml` : `${service}-${stage}-discord-app`)_
+
+2. **Déploiement** :
+   ```bash
+   cd serverless-pixel-war-backend
+   npm install
+   npx serverless deploy --stage cloud
+   ```
+   ➜ Notez l'URL de l'API HTTP et l'URL WebSocket affichées en sortie.
+
+### 2. Frontend
+
+1. **Configuration** :
+   Editez `web_app/src/config.js` avec les URLs obtenues lors du déploiement backend.
+
+2. **Déploiement** :
+   Le frontend utilise le plugin `serverless-finch` pour le déploiement S3/CloudFront.
+   ```bash
+   cd web_app
+   npm install
+   npm run build
+   npx serverless client deploy --stage cloud
+   ```
+
+---
+
+## 🛡 Sécurité & Optimisations
+
+- **Rate Limiting** : Implémenté via DynamoDB (Token Bucket) pour empêcher le spam.
+- **Autorisations** : Rôles IAM moindres privilèges générés automatiquement par Serverless.
+- **Coûts** :
+  - Utilisation de **ARM64** pour les Lambdas (-20% coût, +perf).
+  - **TTL** DynamoDB pour nettoyer automatiquement les sessions expirées.
+  - **S3 Lifecycle** pour supprimer les vieux snapshots après 30 jours.
+  - **AWS Budgets** configuré pour alerter en cas de dépassement de seuil.
+
+## 📄 Licence
+
+Ce projet est open source.
