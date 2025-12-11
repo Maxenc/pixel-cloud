@@ -1,4 +1,4 @@
-service: serverless-pixel-war-backend
+service: pixel
 frameworkVersion: "4"
 
 custom:
@@ -32,8 +32,9 @@ custom:
 provider:
   name: aws
   runtime: nodejs20.x
+  architecture: arm64
   region: eu-west-3
-  stage: dev
+  stage: cloud
   memorySize: 128
   timeout: 10
   logRetentionInDays: 30
@@ -49,7 +50,7 @@ provider:
     CONNECTIONS_TABLE: ${self:custom.connectionsTable}
     SESSIONS_TABLE: ${self:custom.sessionsTable}
     RATE_LIMIT_TABLE: ${self:custom.rateLimitTable}
-    FRONTEND_URL: "https://d3v8d76h8r7cvq.cloudfront.net"
+    FRONTEND_URL: "https://dgdu647cjkm94.cloudfront.net"
     PIXEL_API_BASE_URL:
       Fn::Join:
         - ""
@@ -78,7 +79,7 @@ provider:
   httpApi:
     cors:
       allowedOrigins:
-        - "*"
+        - ${self:provider.environment.FRONTEND_URL}
       allowedMethods:
         - GET
         - POST
@@ -107,6 +108,7 @@ functions:
   # ======================================================
   drawProxy:
     handler: src/handlers/draw/proxy.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-drawProxy-role
     events:
       - httpApi:
           path: /draw
@@ -126,6 +128,7 @@ functions:
 
   drawWorker:
     handler: src/handlers/draw/worker.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-drawWorker-role
     events:
       - sqs:
           arn: !GetAtt DrawQueue.Arn
@@ -149,6 +152,7 @@ functions:
   # ======================================================
   adminSessionPause:
     handler: src/handlers/admin/pause.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-adminPause-role
     events:
       - httpApi:
           path: /admin/session/pause
@@ -160,8 +164,13 @@ functions:
         Resource: !GetAtt AdminsTable.Arn
       - Effect: Allow
         Action:
+          - dynamodb:GetItem
           - dynamodb:UpdateItem
         Resource: !GetAtt GameSessionTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt SessionsTable.Arn
       - Effect: Allow
         Action:
           - sns:Publish
@@ -169,6 +178,7 @@ functions:
 
   adminSessionResume:
     handler: src/handlers/admin/resume.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-adminResume-role
     events:
       - httpApi:
           path: /admin/session/resume
@@ -180,8 +190,13 @@ functions:
         Resource: !GetAtt AdminsTable.Arn
       - Effect: Allow
         Action:
+          - dynamodb:GetItem
           - dynamodb:UpdateItem
         Resource: !GetAtt GameSessionTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt SessionsTable.Arn
       - Effect: Allow
         Action:
           - sns:Publish
@@ -189,6 +204,7 @@ functions:
 
   adminSnapshotTrigger:
     handler: src/handlers/admin/snapshotTrigger.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-adminSnapTrig-role
     events:
       - httpApi:
           path: /admin/snapshots
@@ -209,6 +225,7 @@ functions:
   snapshotWorker:
     handler: src/handlers/snapshot/worker.handler
     timeout: 60
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-snapWorker-role
     events:
       - sqs:
           arn: !GetAtt SnapshotQueue.Arn
@@ -281,6 +298,7 @@ functions:
   # ======================================================
   wsConnect:
     handler: src/handlers/realtime/wsConnect.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-wsConnect-role
     events:
       - websocket:
           route: $connect
@@ -296,6 +314,7 @@ functions:
 
   wsDisconnect:
     handler: src/handlers/realtime/wsDisconnect.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-wsDisconnect-role
     events:
       - websocket:
           route: $disconnect
@@ -307,6 +326,7 @@ functions:
 
   broadcast:
     handler: src/handlers/realtime/broadcast.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-broadcast-role
     environment:
       WEBSOCKET_API_ENDPOINT:
         !Join [
@@ -347,6 +367,7 @@ functions:
   # ======================================================
   discordInteractions:
     handler: src/handlers/discord/interactions.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-discordInt-role
     events:
       - httpApi:
           path: /discord/interactions
@@ -360,6 +381,7 @@ functions:
 
   discordWebhook:
     handler: src/handlers/discord/webhook.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-discordWeb-role
     events:
       - sns:
           arn: !Ref SnapshotEventsTopic
@@ -373,11 +395,12 @@ functions:
   # ======================================================
   auth:
     handler: src/handlers/auth.handler
+    iamRoleStatementsName: ${self:service}-${self:custom.stage}-auth-role
     iamRoleStatements:
       - Effect: Allow
         Action:
           - secretsmanager:GetSecretValue
-        Resource: arn:aws:secretsmanager:eu-west-3:326120905293:secret:discord_secret-ea0Iet*
+        Resource: arn:aws:secretsmanager:${self:provider.region}:${aws:accountId}:secret:${self:custom.discordSecretName}*
       - Effect: Allow
         Action:
           - dynamodb:PutItem
@@ -566,6 +589,11 @@ resources:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: ${self:custom.snapshotBucket}
+        LifecycleConfiguration:
+          Rules:
+            - Id: DeleteOldSnapshots
+              Status: Enabled
+              ExpirationInDays: 30
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
           IgnorePublicAcls: true
@@ -605,6 +633,27 @@ resources:
           - Id: TriggerSnapshotQueue
             Arn: !GetAtt SnapshotQueue.Arn
             Input: '{"canvasId": "main", "triggeredBy": "system-daily"}'
+
+    # ================== Budgets ==================
+    CostBudget:
+      Type: AWS::Budgets::Budget
+      Properties:
+        Budget:
+          BudgetName: ${self:service}-${self:custom.stage}-monthly-budget
+          BudgetType: COST
+          TimeUnit: MONTHLY
+          BudgetLimit:
+            Amount: 10
+            Unit: USD
+        NotificationsWithSubscribers:
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 80
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: maxence.amouroux@epitech.eu
 
     # Allow EventBridge to push to SQS
     EventBridgeToSnapshotQueuePolicy:

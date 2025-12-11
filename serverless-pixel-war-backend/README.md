@@ -1,69 +1,72 @@
-<!--
-title: 'AWS Simple HTTP Endpoint example in NodeJS'
-description: 'This template demonstrates how to make a simple HTTP API with Node.js running on AWS Lambda and API Gateway using the Serverless Framework.'
-layout: Doc
-framework: v4
-platform: AWS
-language: nodeJS
-authorLink: 'https://github.com/serverless'
-authorName: 'Serverless, Inc.'
-authorAvatar: 'https://avatars1.githubusercontent.com/u/13742415?s=200&v=4'
--->
+# Pixel Cloud - Serverless Backend
 
-# Serverless Framework Node HTTP API on AWS
+The serverless backend for **Pixel Cloud**, a real-time collaborative canvas inspired by r/place. Built with **Serverless Framework v4** on **AWS**.
 
-This template demonstrates how to make a simple HTTP API with Node.js running on AWS Lambda and API Gateway using the Serverless Framework.
+## 🏗 Architecture
 
-This template does not include any kind of persistence (database). For more advanced examples, check out the [serverless/examples repository](https://github.com/serverless/examples/) which includes Typescript, Mongo, DynamoDB and other examples.
+The backend utilizes a fully serverless, event-driven architecture designed for scalability and cost-efficiency.
 
-## Usage
+- **Compute**: AWS Lambda (Node.js 20, ARM64)
+- **API**: API Gateway (HTTP API & WebSocket API)
+- **Database**: DynamoDB (On-Demand)
+  - `Pixels`: Stores the state of the board.
+  - `Sessions`: User authentication sessions.
+  - `Connections`: WebSocket connection tracking.
+  - `RateLimit`: Enforces draw limits per user.
+- **Messaging & Queues**:
+  - **SQS**: Buffers write requests (`/draw`) to prevent database throttling.
+  - **SNS**: Broadcasts events (`pixel.drawn`, `snapshot.ready`) to WebSocket broadcasters and external consumers (Discord).
+- **Storage**: S3 (Private bucket for board snapshots).
+- **Scheduling**: EventBridge (Daily snapshots).
 
-### Deployment
+## 🛡 Security & Optimization
 
-In order to deploy the example, you need to run the following command:
+- **Architecture**: Powered by AWS Graviton2 (ARM64) for better performance/cost ratio.
+- **Cost Monitoring**: AWS Budget alerts configured to notify when monthly costs exceed limits.
+- **Storage Lifecycle**: Automatic deletion of S3 snapshots older than 30 days.
+- **Network**: Strict CORS policy allowing only the frontend origin.
+- **Auth**: Discord OAuth2 integration.
 
-```
-serverless deploy
-```
+## 🚀 Deployment
 
-After running deploy, you should see output similar to:
+### Prerequisites
 
-```
-Deploying "serverless-http-api" to stage "dev" (us-east-1)
+- **Node.js 20+**
+- **Serverless Framework v4**: `npm install -g serverless`
+- **AWS Credentials**: Configured via AWS CLI or environment variables.
+- **Secrets Manager**: Create a secret named `serverless-pixel-war-backend-dev-discord-app` (or match your stage) with:
+  ```json
+  {
+    "discord_token": "YOUR_BOT_TOKEN",
+    "public_key": "YOUR_PUBLIC_KEY",
+    "app_id": "YOUR_APP_ID",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET"
+  }
+  ```
 
-✔ Service deployed to stack serverless-http-api-dev (91s)
+### Deploy
 
-endpoint: GET - https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/
-functions:
-  hello: serverless-http-api-dev-hello (1.6 kB)
-```
+```bash
+# Install dependencies
+npm install
 
-_Note_: In current form, after deployment, your API is public and can be invoked by anyone. For production deployments, you might want to configure an authorizer. For details on how to do that, refer to [HTTP API (API Gateway V2) event docs](https://www.serverless.com/framework/docs/providers/aws/events/http-api).
-
-### Invocation
-
-After successful deployment, you can call the created application via HTTP:
-
-```
-curl https://xxxxxxx.execute-api.us-east-1.amazonaws.com/
-```
-
-Which should result in response similar to:
-
-```json
-{ "message": "Go Serverless v4! Your function executed successfully!" }
-```
-
-### Local development
-
-The easiest way to develop and test your function is to use the `dev` command:
-
-```
-serverless dev
+# Deploy to AWS
+npx serverless deploy --stage dev
 ```
 
-This will start a local emulator of AWS Lambda and tunnel your requests to and from AWS Lambda, allowing you to interact with your function as if it were running in the cloud.
+### Key Endpoints
 
-Now you can invoke the function as before, but this time the function will be executed locally. Now you can develop your function locally, invoke it, and see the results immediately without having to re-deploy.
+- `POST /draw`: Place a pixel (Rate limited).
+- `GET /state`: Get current board state.
+- `GET /auth`: OAuth2 flow.
+- `WSS /`: Real-time WebSocket connection.
 
-When you are done developing, don't forget to run `serverless deploy` to deploy the function to the cloud.
+## 🛠 Project Structure
+
+- `src/handlers`: Lambda function handlers.
+  - `draw/`: Logic for placing pixels (Proxy & Worker).
+  - `realtime/`: WebSocket connection and broadcasting.
+  - `snapshot/`: Generates PNG snapshots of the board.
+  - `discord/`: Discord interactions and webhooks.
+- `src/utils`: Shared utilities (AWS clients, image processing).

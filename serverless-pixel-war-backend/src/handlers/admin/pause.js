@@ -47,7 +47,7 @@ const handler = async (event) => {
         Message: JSON.stringify({
           type: "session.paused",
           canvasId,
-          triggeredBy: effectiveUserId,
+          triggeredBy: userId,
           timestamp: new Date().toISOString(),
         }),
       })
@@ -61,4 +61,3 @@ const handler = async (event) => {
 };
 
 module.exports = { handler };
-

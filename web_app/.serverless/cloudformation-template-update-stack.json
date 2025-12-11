@@ -5,7 +5,7 @@
     "FrontendBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": "pixel-war-frontend-dev-326120905293",
+        "BucketName": "pixel-frontend-cloud-475852407423",
         "AccessControl": "Private",
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -35,11 +35,11 @@
         "Tags": [
           {
             "Key": "Service",
-            "Value": "pixel-war-frontend"
+            "Value": "pixel-frontend"
           },
           {
             "Key": "Stage",
-            "Value": "dev"
+            "Value": "cloud"
           }
         ]
       }
@@ -48,7 +48,7 @@
       "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
       "Properties": {
         "CloudFrontOriginAccessIdentityConfig": {
-          "Comment": "Frontend access identity for pixel-war-frontend"
+          "Comment": "Frontend access identity for pixel-frontend"
         }
       }
     },
@@ -81,11 +81,47 @@
         }
       }
     },
+    "SecurityHeadersPolicy": {
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "Name": "pixel-frontend-cloud-security-headers",
+          "SecurityHeadersConfig": {
+            "ContentSecurityPolicy": {
+              "ContentSecurityPolicy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.execute-api.eu-west-3.amazonaws.com wss://*.execute-api.eu-west-3.amazonaws.com; font-src 'self' data:;",
+              "Override": true
+            },
+            "StrictTransportSecurity": {
+              "AccessControlMaxAgeSec": 31536000,
+              "IncludeSubdomains": true,
+              "Preload": true,
+              "Override": true
+            },
+            "ContentTypeOptions": {
+              "Override": true
+            },
+            "FrameOptions": {
+              "FrameOption": "DENY",
+              "Override": true
+            },
+            "ReferrerPolicy": {
+              "ReferrerPolicy": "same-origin",
+              "Override": true
+            },
+            "XSSProtection": {
+              "ModeBlock": true,
+              "Protection": true,
+              "Override": true
+            }
+          }
+        }
+      }
+    },
     "FrontendDistribution": {
       "Type": "AWS::CloudFront::Distribution",
       "Properties": {
         "DistributionConfig": {
-          "Comment": "Pixel War Frontend dev",
+          "Comment": "Pixel War Frontend cloud",
           "Enabled": true,
           "HttpVersion": "http2",
           "DefaultRootObject": "index.html",
@@ -119,7 +155,10 @@
             "Compress": true,
             "TargetOriginId": "frontendOrigin",
             "ViewerProtocolPolicy": "redirect-to-https",
-            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            "ResponseHeadersPolicyId": {
+              "Ref": "SecurityHeadersPolicy"
+            }
           },
           "CustomErrorResponses": [
             {
@@ -149,9 +188,9 @@
   },
   "Outputs": {
     "ServerlessDeploymentBucketName": {
-      "Value": "serverless-framework-deployments-eu-west-3-8fa1fd54-79f1",
+      "Value": "serverless-framework-deployments-eu-west-3-b15ad9a8-fdc6",
       "Export": {
-        "Name": "sls-pixel-war-frontend-dev-ServerlessDeploymentBucketName"
+        "Name": "sls-pixel-frontend-cloud-ServerlessDeploymentBucketName"
       }
     },
     "FrontendBucketName": {
@@ -160,7 +199,7 @@
         "Ref": "FrontendBucket"
       },
       "Export": {
-        "Name": "pixel-war-frontend-dev-bucket"
+        "Name": "pixel-frontend-cloud-bucket"
       }
     },
     "FrontendDistributionId": {
@@ -169,7 +208,7 @@
         "Ref": "FrontendDistribution"
       },
       "Export": {
-        "Name": "pixel-war-frontend-dev-distribution-id"
+        "Name": "pixel-frontend-cloud-distribution-id"
       }
     },
     "FrontendDistributionDomain": {
@@ -181,7 +220,7 @@
         ]
       },
       "Export": {
-        "Name": "pixel-war-frontend-dev-distribution-domain"
+        "Name": "pixel-frontend-cloud-distribution-domain"
       }
     }
   }

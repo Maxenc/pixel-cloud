@@ -1,7 +1,7 @@
 const defaultConfig = {
-  apiBaseUrl: "https://xvgw4ug9he.execute-api.eu-west-3.amazonaws.com",
+  apiBaseUrl: "https://mahymtjou4.execute-api.eu-west-3.amazonaws.com",
   pollingIntervalMs: 5000,
-  wsBaseUrl: "wss://7g9qkz6nng.execute-api.eu-west-3.amazonaws.com/dev/",
+  wsBaseUrl: "wss://qiq8g139y4.execute-api.eu-west-3.amazonaws.com/cloud/",
   board: { width: 256, height: 256 },
   discordAuthorizeEndpoint: "https://discord.com/oauth2/authorize",
   discordClientId: "1436365247056314569",
@@ -9,7 +9,7 @@ const defaultConfig = {
   discordRedirectUri: null,
   authExchangePath: "/auth/discord/exchange",
   redirectAuthUri:
-    "https://xvgw4ug9he.execute-api.eu-west-3.amazonaws.com/auth",
+    "https://mahymtjou4.execute-api.eu-west-3.amazonaws.com/auth",
   rateLimit: {
     maxPlacements: 20,
     windowSeconds: 60,

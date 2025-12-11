@@ -1,11 +1,11 @@
-service: pixel-war-frontend
+service: pixel-frontend
 frameworkVersion: "4"
 
 provider:
   name: aws
   runtime: nodejs20.x
   region: eu-west-3
-  stage: ${opt:stage, 'dev'}
+  stage: ${opt:stage, 'cloud'}
   deploymentBucket:
     blockPublicAccess: true
 
@@ -75,6 +75,33 @@ resources:
               Action: s3:GetObject
               Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
 
+    SecurityHeadersPolicy:
+      Type: AWS::CloudFront::ResponseHeadersPolicy
+      Properties:
+        ResponseHeadersPolicyConfig:
+          Name: ${self:service}-${self:custom.stage}-security-headers
+          SecurityHeadersConfig:
+            ContentSecurityPolicy:
+              ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.execute-api.eu-west-3.amazonaws.com wss://*.execute-api.eu-west-3.amazonaws.com; font-src 'self' data:;"
+              Override: true
+            StrictTransportSecurity:
+              AccessControlMaxAgeSec: 31536000
+              IncludeSubdomains: true
+              Preload: true
+              Override: true
+            ContentTypeOptions:
+              Override: true
+            FrameOptions:
+              FrameOption: DENY
+              Override: true
+            ReferrerPolicy:
+              ReferrerPolicy: same-origin
+              Override: true
+            XSSProtection:
+              ModeBlock: true
+              Protection: true
+              Override: true
+
     FrontendDistribution:
       Type: AWS::CloudFront::Distribution
       Properties:
@@ -101,6 +128,7 @@ resources:
             TargetOriginId: frontendOrigin
             ViewerProtocolPolicy: redirect-to-https
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized managed policy
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
           CustomErrorResponses:
             - ErrorCode: 403
               ErrorCachingMinTTL: 0

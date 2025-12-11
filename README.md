@@ -1,98 +1,75 @@
-# Pixel War Next
+# Pixel Cloud
 
-Clone inspiré de Reddit r/place : une toile 256×256 partagée en temps réel, pilotée par un backend full serverless, un frontend React et un bot Discord.
+**Pixel Cloud** is a serverless, real-time collaborative canvas application (inspired by Reddit's r/place). Users can place colored pixels on a shared 256x256 board, with changes broadcasting instantly to all connected clients.
 
-## Architecture
+## 🌟 Features
 
-```
-Frontend (Vite/React) -> CloudFront -> S3 privé
-        |
-        v
-HTTP API (API Gateway)
-  ├─ /draw (Lambda proxy -> SQS draw queue)
-  ├─ /snapshots (liste JSON)
-  ├─ /admin/* (pause/resume/snapshot)
-  ├─ /auth (OAuth2 Discord -> sessions DynamoDB)
-  └─ /discord/interactions (Slash commands)
+- **Real-time Collaboration**: WebSocket-based updates ensure users see changes as they happen.
+- **Serverless Architecture**: Built entirely on AWS Serverless (Lambda, DynamoDB, API Gateway) for infinite scaling and zero maintenance.
+- **Discord Authentication**: Secure login via Discord OAuth2.
+- **Interactive UI**: Fast, responsive React frontend.
+- **Admin Tools**: Snapshot generation, board moderation tools.
+- **Production Ready**:
+  - **Cost Optimized**: ARM64 compute, S3 lifecycle policies, and budget alerts.
+  - **Secure**: Strict Content Security Policy (CSP), CORS, and rate limiting.
 
-Workers
-  ├─ draw/worker (SQS -> DynamoDB Pixels + SNS events)
-  └─ snapshot/worker (SQS -> PNG S3 + SNS + Discord webhook)
+## 📂 Project Structure
 
-Stores
-  ├─ DynamoDB: pixels, sessions, game session, rate limit, admins
-  ├─ S3: snapshot images (privé)
-  └─ Secrets Manager: credentials Discord
+This monorepo contains two main packages:
 
-Realtime
-  └─ API Gateway WebSocket (connect / disconnect / broadcast)
-```
+- **[`serverless-pixel-war-backend/`](./serverless-pixel-war-backend)**: The Node.js backend infrastructure defined with Serverless Framework. Handles APIs, WebSockets, database, and background workers.
+- **[`web_app/`](./web_app)**: The React frontend (Vite) deployed to AWS CloudFront + S3 via `serverless-finch`.
 
-## Principales briques
+## 🚀 Getting Started
 
-- **Backend** : Node.js 20, Serverless Framework v4, AWS (API Gateway HTTP & WebSocket, Lambda, DynamoDB, SQS/SNS, S3, EventBridge).
-- **Frontend** : Vite + React 18, déployé via `serverless-finch` (CloudFront + S3 privé + fallback SPA).
-- **Discord** : Slash commands `/pixel`, `/snapshot`, `/pause`, `/resume`, `/state` gérés par une Lambda `discordInteractions`. Webhook notifie les snapshots prêts.
-- **Rate limiting** : DynamoDB `RateLimitTable` (clé `[userId, minuteBucket]`, TTL 120 s) appliqué au proxy `draw` + worker (sécurité anti-spam).
-- **Documentation** : `DEPLOYMENT_NOTES.md`, `SECURITY_REPORT.txt`, `PROJECT_JOURNAL.txt`.
+### Prerequisites
 
-## Lancer / Déployer
+- Node.js 20+
+- AWS Account and CLI configured
+- Discord Developer Application (for Auth)
 
-### Backend
+### 1. Deploy the Backend
+
+Navigate to the backend directory and deploy the stack:
 
 ```bash
 cd serverless-pixel-war-backend
 npm install
-npx serverless deploy --stage <stage> --aws-profile <profile>
+npx serverless deploy --stage dev
 ```
 
-Pré-requis :
+_Note the `HttpApiUrl` and `WebSocketUrl` from the output._
 
-- Secrets Manager `serverless-pixel-war-backend-<stage>-discord-app` contenant :
-  ```json
-  { "discord_token": "...", "public_key": "...", "app_id": "..." }
-  ```
-- DynamoDB/SQS/SNS/S3 gérés automatiquement par la stack.
+### 2. Configure & Deploy the Frontend
 
-### Frontend
+Navigate to the web app directory:
 
 ```bash
 cd web_app
 npm install
+```
+
+Update `src/config.js` or environment variables with your deployed Backend URLs.
+
+Build and deploy to S3/CloudFront:
+
+```bash
 npm run build
-npm run deploy:frontend -- --stage <stage>
-# (removal) npm run remove:frontend -- --stage <stage>
+npx serverless client deploy --stage dev
 ```
 
-Le déploiement crée/actualise :
+## 🛠 Tech Stack
 
-- Bucket S3 privé `${service}-${stage}-${accountId}`
-- Distribution CloudFront : HTTPS obligatoire, fallback SPA (403/404→200), PriceClass_100.
-  Pense à invalider CloudFront (`aws cloudfront create-invalidation …`) après chaque release majeure.
+- **Frontend**: React, Vite, Canvas API.
+- **Backend**: Node.js, Serverless Framework.
+- **AWS Services**:
+  - **Compute**: Lambda (ARM64)
+  - **API**: API Gateway (HTTP & WebSocket)
+  - **Database**: DynamoDB
+  - **Storage**: S3
+  - **Queues/Events**: SQS, SNS, EventBridge
+  - **CDN**: CloudFront
 
-### Discord Commands
+## 📄 License
 
-```
-cd discord-example-app
-npm install
-DISCORD_TOKEN=... APP_ID=... PUBLIC_KEY=... node commands.js
-```
-
-Ce script (hérité du projet d’origine) publie les commandes globales.
-
-## Fonctionnement
-
-- Les utilisateurs se connectent via OAuth2 Discord (`/auth`). Le frontend stocke le token de session.
-- Chaque clic sur la toile déclenche `/draw`. La Lambda vérifie statut de partie + quota minute, puis pousse le pixel dans SQS.
-- Le worker `draw` écrit dans DynamoDB, publie un événement SNS (consommé par le broadcaster WebSocket + Discord).
-- Les snapshots sont demandés via `/admin/snapshots` (bot ou UI). Le worker scanne les pixels, génère un PNG, l’écrit sur S3, publie l’événement `snapshot.ready`.
-- Le frontend est pré-rendu (Vite) et consomme l’API + WebSocket pour afficher la toile en temps réel.
-
-## Connaissances clés
-
-- Serverless Framework multi-services, IAM granulaire.
-- DynamoDB (TTL, condition expressions, GSI).
-- SQS/SNS orchestration, EventBridge, WebSocket API Gateway.
-- Secrets Manager, Discord interactions (Ed25519), OAuth2.
-- CloudFront/S3 privé via `serverless-finch`.
-- UX : WebSocket React, toasts auto-expirants, rate limit UX.
+This project is open source.

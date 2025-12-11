@@ -46,7 +46,7 @@ const handler = async (event) => {
         Message: JSON.stringify({
           type: "session.resumed",
           canvasId,
-          triggeredBy: effectiveUserId,
+          triggeredBy: userId,
           timestamp: new Date().toISOString(),
         }),
       })
@@ -60,4 +60,3 @@ const handler = async (event) => {
 };
 
 module.exports = { handler };
-

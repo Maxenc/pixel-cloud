@@ -47,7 +47,7 @@ export function AdminPanel({
             <button
               className="primary-button"
               onClick={onResume}
-              disabled={!isPaused}
+              disabled={false}
             >
               Reprendre
             </button>

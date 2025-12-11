@@ -29,14 +29,11 @@ const handler = async (event) => {
 
     try {
       const secretVal = await secrets.send(
-        new GetSecretValueCommand({ SecretId: "discord_secret" })
+        new GetSecretValueCommand({ SecretId: process.env.DISCORD_SECRET_NAME })
       );
       const secretJson = JSON.parse(secretVal.SecretString);
-      console.log("secretJson", secretJson);
       clientSecret = secretJson.client_secret;
       clientId = secretJson.client_id;
-      console.log("clientSecret", clientSecret);
-      console.log("clientId", clientId);
     } catch (e) {
       console.error("Failed to fetch secret", e);
       return error(500, "Configuration error");
