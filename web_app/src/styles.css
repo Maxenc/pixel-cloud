@@ -319,7 +319,7 @@ button {
 .snapshot-drawer {
   position: fixed;
   top: 0;
-  right: -420px;
+  right: 0;
   width: 400px;
   height: 100vh;
   background: rgba(15, 23, 42, 0.98);
@@ -329,13 +329,9 @@ button {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  transition: right 0.3s ease;
   z-index: 80;
 }
 
-.snapshot-drawer.is-open {
-  right: 0;
-}
 
 .snapshot-drawer__header {
   display: flex;
@@ -643,9 +639,156 @@ button {
   color: #bbf7d0;
 }
 
-.status-error {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
+/* Credits Overlay & Transitions */
+.credits-container {
+  position: fixed;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 60px rgba(2, 6, 23, 0.7);
+  overflow: hidden;
+}
+
+/* 1. Intro / Expanded State: Centered Modal */
+.credits-container.intro,
+.credits-container.expanded {
+  width: min(500px, 90vw);
+  padding: 40px;
+  border-radius: 32px;
+  text-align: center;
+}
+
+/* 2. Collapsed State: Top Pill */
+.credits-container.collapsed {
+  width: auto;
+  padding: 8px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.credits-container.collapsed:hover {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+/* Content Styling */
+.credits-header {
+  margin-bottom: 24px;
+}
+
+.credits-role {
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: #38bdf8;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.credits-header h3 {
+  font-size: 32px;
+  font-weight: 800;
+  color: #f8fafc;
+  margin: 0;
+  background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.credits-header p {
+  color: #94a3b8;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.credits-description {
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  font-size: 16px;
+}
+
+.credits-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.credit-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.credit-link:hover {
+  transform: translateY(-2px);
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #fff;
+}
+
+/* Summary View (Collapsed) */
+.credits-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.credits-role-micro {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.credits-name-micro {
+  font-weight: 600;
+  color: #38bdf8;
+  font-size: 13px;
+}
+
+.credits-info-icon {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.credits-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.credits-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
 }
 
 @media (max-width: 768px) {

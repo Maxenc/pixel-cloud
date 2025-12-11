@@ -195,6 +195,15 @@ export default function App() {
     const fallbackY =
       typeof pixel.y === "number" ? pixel.y : Math.floor(index / width);
     const nextColor = pixel.color ?? "#000000";
+
+    // Add ripple effect for new pixel
+    const canvas = document.querySelector(".pixel-canvas");
+    if (canvas) {
+      // Dispatch custom event for canvas to handle if needed,
+      // or we can handle it in CanvasStage via props.
+      // For now, let's just update state.
+    }
+
     setSnapshot((prev) => {
       const remaining = prev.pixels.filter(
         ({ index: currentIndex }) => currentIndex !== index
@@ -540,33 +549,30 @@ export default function App() {
           refreshGameState(false);
         }}
       />
-      <Cursor />
 
       <AnimatePresence>
-        {showAdminPanel && isAdmin && (
-          <AdminPanel
-            isPaused={isPaused}
-            onPause={handlePauseGame}
-            onResume={handleResumeGame}
-            onRequestSnapshot={handleRequestSnapshot}
-            onClose={() => setShowAdminPanel(false)}
-          />
+        {cooldown > 0 && (
+          <motion.div
+            className="rate-limit-banner"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            Encore {cooldown}s avant de pouvoir rejouer.
+          </motion.div>
+        )}
+        {isPaused && (
+          <motion.div
+            className="rate-limit-banner"
+            style={{ backgroundColor: "#e74c3c" }}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            ⏸️ PAUSED
+          </motion.div>
         )}
       </AnimatePresence>
-
-      {cooldown > 0 && (
-        <div className="rate-limit-banner">
-          Encore {cooldown}s avant de pouvoir rejouer.
-        </div>
-      )}
-      {isPaused && (
-        <div
-          className="rate-limit-banner"
-          style={{ backgroundColor: "#e74c3c" }}
-        >
-          ⏸️ PAUSED
-        </div>
-      )}
 
       <section className="canvas-section">
         <CanvasStage
@@ -613,6 +619,20 @@ export default function App() {
           onRefresh={() => refreshGameState(false)}
         />
       </section>
+
+      <Cursor />
+
+      <AnimatePresence>
+        {showAdminPanel && isAdmin && (
+          <AdminPanel
+            isPaused={isPaused}
+            onPause={handlePauseGame}
+            onResume={handleResumeGame}
+            onRequestSnapshot={handleRequestSnapshot}
+            onClose={() => setShowAdminPanel(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedPixel && pixelMeta && pixelAnchor && (

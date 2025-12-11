@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
 } from "react";
+import gsap from "gsap";
 import { appConfig } from "../config";
 
 const MIN_ZOOM = 0.75;
@@ -217,12 +218,35 @@ export const CanvasStage = forwardRef(function CanvasStage(
     zoomToPixel(pixel, targetZoom = 3.5) {
       if (!pixel || !viewportRef.current) return;
       const viewport = viewportRef.current.getBoundingClientRect();
-      const target = clampZoom(targetZoom);
-      setZoom(target);
-      setPan({
-        x: viewport.width / 2 - (pixel.x + 0.5) * target,
-        y: viewport.height / 2 - (pixel.y + 0.5) * target,
+      const targetZ = clampZoom(targetZoom);
+
+      const targetPanX = viewport.width / 2 - (pixel.x + 0.5) * targetZ;
+      const targetPanY = viewport.height / 2 - (pixel.y + 0.5) * targetZ;
+
+      // Use a proxy object to animate values
+      const proxy = { zoom: zoom, x: pan.x, y: pan.y };
+
+      gsap.to(proxy, {
+        zoom: targetZ,
+        x: targetPanX,
+        y: targetPanY,
+        duration: 1.2,
+        ease: "power4.out",
+        onUpdate: () => {
+          setZoom(proxy.zoom);
+          setPan({ x: proxy.x, y: proxy.y });
+        },
       });
+
+      // Animate highlight
+      const highlight = document.querySelector(".pixel-highlight");
+      if (highlight) {
+        gsap.fromTo(
+          highlight,
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(1.7)" }
+        );
+      }
     },
   }));
 

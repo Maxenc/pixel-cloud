@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { formatDate } from "../utils/date";
 
 export function PixelInfoCard({
@@ -16,7 +17,14 @@ export function PixelInfoCard({
   const hasDate = !!meta.updated_at;
 
   return (
-    <div className="pixel-card" style={{ left: position.x, top: position.y }}>
+    <motion.div
+      className="pixel-card"
+      style={{ left: position.x, top: position.y }}
+      initial={{ opacity: 0, scale: 0.8, x: "-50%", y: "-100%" }}
+      animate={{ opacity: 1, scale: 1, x: "-50%", y: "-120%" }}
+      exit={{ opacity: 0, scale: 0.8, x: "-50%", y: "-100%" }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+    >
       <div className="pixel-card__header">
         <div>
           <p className="pixel-card__coords">
@@ -24,9 +32,15 @@ export function PixelInfoCard({
           </p>
           {hasAuthor && <p className="pixel-card__author">{meta.author}</p>}
         </div>
-        <button className="icon-button" onClick={onClose} aria-label="Fermer">
+        <motion.button
+          className="icon-button"
+          onClick={onClose}
+          aria-label="Fermer"
+          whileHover={{ scale: 1.2, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+        >
           ×
-        </button>
+        </motion.button>
       </div>
       {hasDate && (
         <div className="pixel-card__meta">
@@ -45,9 +59,15 @@ export function PixelInfoCard({
           Patiente encore {cooldown}s avant le prochain pixel.
         </p>
       )}
-      <button className="primary-button" onClick={onPlace} disabled={!canPlace}>
+      <motion.button
+        className="primary-button"
+        onClick={onPlace}
+        disabled={!canPlace}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
         {cooldown > 0 ? `Attends ${cooldown}s` : "Placer un pixel"}
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   );
 }

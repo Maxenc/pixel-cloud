@@ -1,7 +1,7 @@
+import { motion } from "motion/react";
 import { formatDate } from "../utils/date";
 
 export function SnapshotDrawer({
-  open,
   snapshots,
   loading,
   onClose,
@@ -12,8 +12,20 @@ export function SnapshotDrawer({
 }) {
   return (
     <>
-      {open && <div className="snapshot-backdrop" onClick={onClose} />}
-      <aside className={`snapshot-drawer${open ? " is-open" : ""}`}>
+      <motion.div
+        className="snapshot-backdrop"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      <motion.aside
+        className="snapshot-drawer is-open"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
         <div className="snapshot-drawer__header">
           <h2>Snapshots</h2>
           <div className="snapshot-drawer__actions">
@@ -49,14 +61,16 @@ export function SnapshotDrawer({
             <ul className="snapshot-list">
               {snapshots.map((snapshot) => (
                 <li key={snapshot.id} className="snapshot-item">
-                  <a
+                  <motion.a
                     href={snapshot.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="snapshot-preview"
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
                   >
                     <img src={snapshot.url} alt={`Snapshot ${snapshot.id}`} />
-                  </a>
+                  </motion.a>
                   <div className="snapshot-info">
                     <p className="snapshot-date">
                       {snapshot.createdAt
@@ -74,7 +88,7 @@ export function SnapshotDrawer({
             <p>Aucune snapshot.</p>
           )}
         </div>
-      </aside>
+      </motion.aside>
     </>
   );
 }

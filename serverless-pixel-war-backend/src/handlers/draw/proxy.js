@@ -9,7 +9,9 @@ const { getSession, checkInternalSecret } = require("../../utils/security");
 
 const MAX_WIDTH = parseInt(process.env.BOARD_WIDTH || "256");
 const MAX_HEIGHT = parseInt(process.env.BOARD_HEIGHT || "256");
-const MAX_PIXELS_PER_MINUTE = parseInt(process.env.MAX_PIXELS_PER_MINUTE || "20");
+const MAX_PIXELS_PER_MINUTE = parseInt(
+  process.env.MAX_PIXELS_PER_MINUTE || "20"
+);
 
 const minuteBucket = () => new Date().toISOString().slice(0, 16);
 
@@ -46,7 +48,9 @@ const enforceRateLimit = async (userId) => {
       err.name === "ConditionalCheckFailedException" ||
       err.Code === "ConditionalCheckFailedException"
     ) {
-      console.warn(`Rate limit exceeded for user ${userId} in bucket ${bucket}`);
+      console.warn(
+        `Rate limit exceeded for user ${userId} in bucket ${bucket}`
+      );
       return false;
     }
     throw err;

@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { formatDate } from "../utils/date";
 
 const formatNumber = (value) =>
@@ -41,7 +42,13 @@ export function GameStatePanel({ gameState, loading, onRefresh }) {
   ];
 
   return (
-    <section className="game-state-chip" aria-live="polite">
+    <motion.section
+      className="game-state-chip"
+      aria-live="polite"
+      initial={{ y: 50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.5, type: "spring", stiffness: 100 }}
+    >
       <div>
         <p className="game-state-chip__label">État</p>
         <p className={`game-state-chip__status ${statusTone}`}>{statusLabel}</p>
@@ -61,6 +68,6 @@ export function GameStatePanel({ gameState, loading, onRefresh }) {
       >
         {loading ? "..." : "↻"}
       </button>
-    </section>
+    </motion.section>
   );
 }

@@ -50,7 +50,7 @@ provider:
     CONNECTIONS_TABLE: ${self:custom.connectionsTable}
     SESSIONS_TABLE: ${self:custom.sessionsTable}
     RATE_LIMIT_TABLE: ${self:custom.rateLimitTable}
-    FRONTEND_URL: "https://dgdu647cjkm94.cloudfront.net"
+    FRONTEND_URL: "https://pixel.maxence-amouroux.dev"
     PIXEL_API_BASE_URL:
       Fn::Join:
         - ""
@@ -120,6 +120,11 @@ functions:
         Resource:
           - !GetAtt SessionsTable.Arn
           - !GetAtt GameSessionTable.Arn
+          - !GetAtt RateLimitTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource:
           - !GetAtt RateLimitTable.Arn
       - Effect: Allow
         Action:
@@ -213,7 +218,9 @@ functions:
       - Effect: Allow
         Action:
           - dynamodb:GetItem
-        Resource: !GetAtt AdminsTable.Arn
+        Resource:
+          - !GetAtt AdminsTable.Arn
+          - !GetAtt SessionsTable.Arn
       - Effect: Allow
         Action:
           - sqs:SendMessage

@@ -9,6 +9,8 @@
     "deploy:frontend": "serverless client deploy"
   },
   "dependencies": {
+    "gsap": "^3.14.1",
+    "motion": "^12.23.26",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
