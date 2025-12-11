@@ -1,0 +1,134 @@
+service: pixel-war-frontend
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-west-3
+  stage: ${opt:stage, 'dev'}
+  deploymentBucket:
+    blockPublicAccess: true
+
+plugins:
+  - serverless-finch
+
+custom:
+  stage: ${self:provider.stage}
+  region: ${self:provider.region}
+  frontendBucketName: ${self:service}-${self:custom.stage}-${aws:accountId}
+  client:
+    bucketName: ${self:custom.frontendBucketName}
+    distributionFolder: dist
+    indexDocument: index.html
+    errorDocument: index.html
+    manageResources: false
+    region: ${self:custom.region}
+    uploadOrder:
+      - ".*\\.js$"
+      - ".*\\.css$"
+      - "index\\.html"
+
+resources:
+  Resources:
+    FrontendBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.frontendBucketName}
+        AccessControl: Private
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: BucketOwnerEnforced
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: true
+          RestrictPublicBuckets: true
+        VersioningConfiguration:
+          Status: Suspended
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:custom.stage}
+
+    CloudFrontOAI:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: Frontend access identity for ${self:service}
+
+    FrontendBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref FrontendBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: AllowCloudFrontRead
+              Effect: Allow
+              Principal:
+                CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+              Action: s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+
+    FrontendDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Comment: Pixel War Frontend ${self:custom.stage}
+          Enabled: true
+          HttpVersion: http2
+          DefaultRootObject: index.html
+          PriceClass: PriceClass_100
+          Origins:
+            - Id: frontendOrigin
+              DomainName: !GetAtt FrontendBucket.RegionalDomainName
+              S3OriginConfig:
+                OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
+          DefaultCacheBehavior:
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            TargetOriginId: frontendOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized managed policy
+          CustomErrorResponses:
+            - ErrorCode: 403
+              ErrorCachingMinTTL: 0
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+            - ErrorCode: 404
+              ErrorCachingMinTTL: 0
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+          Restrictions:
+            GeoRestriction:
+              RestrictionType: none
+          ViewerCertificate:
+            CloudFrontDefaultCertificate: true
+
+  Outputs:
+    FrontendBucketName:
+      Description: Private bucket holding the SPA assets
+      Value: !Ref FrontendBucket
+      Export:
+        Name: ${self:service}-${self:custom.stage}-bucket
+    FrontendDistributionId:
+      Description: CloudFront distribution id
+      Value: !Ref FrontendDistribution
+      Export:
+        Name: ${self:service}-${self:custom.stage}-distribution-id
+    FrontendDistributionDomain:
+      Description: CloudFront public domain
+      Value: !GetAtt FrontendDistribution.DomainName
+      Export:
+        Name: ${self:service}-${self:custom.stage}-distribution-domain

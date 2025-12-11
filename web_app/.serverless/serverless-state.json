@@ -1,0 +1,435 @@
+{
+  "service": {
+    "service": "pixel-war-frontend",
+    "serviceObject": {
+      "name": "pixel-war-frontend"
+    },
+    "provider": {
+      "name": "aws",
+      "runtime": "nodejs20.x",
+      "region": "eu-west-3",
+      "stage": "dev",
+      "deploymentBucket": null,
+      "versionFunctions": true,
+      "deploymentBucketObject": {
+        "blockPublicAccess": true
+      },
+      "compiledCloudFormationTemplate": {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "The AWS CloudFormation template for this Serverless application",
+        "Resources": {
+          "FrontendBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+              "BucketName": "pixel-war-frontend-dev-326120905293",
+              "AccessControl": "Private",
+              "BucketEncryption": {
+                "ServerSideEncryptionConfiguration": [
+                  {
+                    "ServerSideEncryptionByDefault": {
+                      "SSEAlgorithm": "AES256"
+                    }
+                  }
+                ]
+              },
+              "OwnershipControls": {
+                "Rules": [
+                  {
+                    "ObjectOwnership": "BucketOwnerEnforced"
+                  }
+                ]
+              },
+              "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": true,
+                "IgnorePublicAcls": true,
+                "BlockPublicPolicy": true,
+                "RestrictPublicBuckets": true
+              },
+              "VersioningConfiguration": {
+                "Status": "Suspended"
+              },
+              "Tags": [
+                {
+                  "Key": "Service",
+                  "Value": "pixel-war-frontend"
+                },
+                {
+                  "Key": "Stage",
+                  "Value": "dev"
+                }
+              ]
+            }
+          },
+          "CloudFrontOAI": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties": {
+              "CloudFrontOriginAccessIdentityConfig": {
+                "Comment": "Frontend access identity for pixel-war-frontend"
+              }
+            }
+          },
+          "FrontendBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+              "Bucket": {
+                "Ref": "FrontendBucket"
+              },
+              "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Sid": "AllowCloudFrontRead",
+                    "Effect": "Allow",
+                    "Principal": {
+                      "CanonicalUser": {
+                        "Fn::GetAtt": [
+                          "CloudFrontOAI",
+                          "S3CanonicalUserId"
+                        ]
+                      }
+                    },
+                    "Action": "s3:GetObject",
+                    "Resource": {
+                      "Fn::Sub": "arn:aws:s3:::${FrontendBucket}/*"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "FrontendDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+              "DistributionConfig": {
+                "Comment": "Pixel War Frontend dev",
+                "Enabled": true,
+                "HttpVersion": "http2",
+                "DefaultRootObject": "index.html",
+                "PriceClass": "PriceClass_100",
+                "Origins": [
+                  {
+                    "Id": "frontendOrigin",
+                    "DomainName": {
+                      "Fn::GetAtt": [
+                        "FrontendBucket",
+                        "RegionalDomainName"
+                      ]
+                    },
+                    "S3OriginConfig": {
+                      "OriginAccessIdentity": {
+                        "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
+                      }
+                    }
+                  }
+                ],
+                "DefaultCacheBehavior": {
+                  "AllowedMethods": [
+                    "GET",
+                    "HEAD",
+                    "OPTIONS"
+                  ],
+                  "CachedMethods": [
+                    "GET",
+                    "HEAD"
+                  ],
+                  "Compress": true,
+                  "TargetOriginId": "frontendOrigin",
+                  "ViewerProtocolPolicy": "redirect-to-https",
+                  "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+                },
+                "CustomErrorResponses": [
+                  {
+                    "ErrorCode": 403,
+                    "ErrorCachingMinTTL": 0,
+                    "ResponseCode": 200,
+                    "ResponsePagePath": "/index.html"
+                  },
+                  {
+                    "ErrorCode": 404,
+                    "ErrorCachingMinTTL": 0,
+                    "ResponseCode": 200,
+                    "ResponsePagePath": "/index.html"
+                  }
+                ],
+                "Restrictions": {
+                  "GeoRestriction": {
+                    "RestrictionType": "none"
+                  }
+                },
+                "ViewerCertificate": {
+                  "CloudFrontDefaultCertificate": true
+                }
+              }
+            }
+          }
+        },
+        "Outputs": {
+          "ServerlessDeploymentBucketName": {
+            "Value": "serverless-framework-deployments-eu-west-3-8fa1fd54-79f1",
+            "Export": {
+              "Name": "sls-pixel-war-frontend-dev-ServerlessDeploymentBucketName"
+            }
+          },
+          "FrontendBucketName": {
+            "Description": "Private bucket holding the SPA assets",
+            "Value": {
+              "Ref": "FrontendBucket"
+            },
+            "Export": {
+              "Name": "pixel-war-frontend-dev-bucket"
+            }
+          },
+          "FrontendDistributionId": {
+            "Description": "CloudFront distribution id",
+            "Value": {
+              "Ref": "FrontendDistribution"
+            },
+            "Export": {
+              "Name": "pixel-war-frontend-dev-distribution-id"
+            }
+          },
+          "FrontendDistributionDomain": {
+            "Description": "CloudFront public domain",
+            "Value": {
+              "Fn::GetAtt": [
+                "FrontendDistribution",
+                "DomainName"
+              ]
+            },
+            "Export": {
+              "Name": "pixel-war-frontend-dev-distribution-domain"
+            }
+          }
+        }
+      }
+    },
+    "custom": {
+      "stage": "dev",
+      "region": "eu-west-3",
+      "frontendBucketName": "pixel-war-frontend-dev-326120905293",
+      "client": {
+        "bucketName": "pixel-war-frontend-dev-326120905293",
+        "distributionFolder": "dist",
+        "indexDocument": "index.html",
+        "errorDocument": "index.html",
+        "manageResources": false,
+        "region": "eu-west-3",
+        "uploadOrder": [
+          ".*\\.js$",
+          ".*\\.css$",
+          "index\\.html"
+        ]
+      }
+    },
+    "plugins": [
+      "serverless-finch"
+    ],
+    "pluginsData": {},
+    "functions": {},
+    "resources": {
+      "Resources": {
+        "FrontendBucket": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+            "BucketName": "pixel-war-frontend-dev-326120905293",
+            "AccessControl": "Private",
+            "BucketEncryption": {
+              "ServerSideEncryptionConfiguration": [
+                {
+                  "ServerSideEncryptionByDefault": {
+                    "SSEAlgorithm": "AES256"
+                  }
+                }
+              ]
+            },
+            "OwnershipControls": {
+              "Rules": [
+                {
+                  "ObjectOwnership": "BucketOwnerEnforced"
+                }
+              ]
+            },
+            "PublicAccessBlockConfiguration": {
+              "BlockPublicAcls": true,
+              "IgnorePublicAcls": true,
+              "BlockPublicPolicy": true,
+              "RestrictPublicBuckets": true
+            },
+            "VersioningConfiguration": {
+              "Status": "Suspended"
+            },
+            "Tags": [
+              {
+                "Key": "Service",
+                "Value": "pixel-war-frontend"
+              },
+              {
+                "Key": "Stage",
+                "Value": "dev"
+              }
+            ]
+          }
+        },
+        "CloudFrontOAI": {
+          "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+          "Properties": {
+            "CloudFrontOriginAccessIdentityConfig": {
+              "Comment": "Frontend access identity for pixel-war-frontend"
+            }
+          }
+        },
+        "FrontendBucketPolicy": {
+          "Type": "AWS::S3::BucketPolicy",
+          "Properties": {
+            "Bucket": {
+              "Ref": "FrontendBucket"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AllowCloudFrontRead",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "CanonicalUser": {
+                      "Fn::GetAtt": [
+                        "CloudFrontOAI",
+                        "S3CanonicalUserId"
+                      ]
+                    }
+                  },
+                  "Action": "s3:GetObject",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${FrontendBucket}/*"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "FrontendDistribution": {
+          "Type": "AWS::CloudFront::Distribution",
+          "Properties": {
+            "DistributionConfig": {
+              "Comment": "Pixel War Frontend dev",
+              "Enabled": true,
+              "HttpVersion": "http2",
+              "DefaultRootObject": "index.html",
+              "PriceClass": "PriceClass_100",
+              "Origins": [
+                {
+                  "Id": "frontendOrigin",
+                  "DomainName": {
+                    "Fn::GetAtt": [
+                      "FrontendBucket",
+                      "RegionalDomainName"
+                    ]
+                  },
+                  "S3OriginConfig": {
+                    "OriginAccessIdentity": {
+                      "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
+                    }
+                  }
+                }
+              ],
+              "DefaultCacheBehavior": {
+                "AllowedMethods": [
+                  "GET",
+                  "HEAD",
+                  "OPTIONS"
+                ],
+                "CachedMethods": [
+                  "GET",
+                  "HEAD"
+                ],
+                "Compress": true,
+                "TargetOriginId": "frontendOrigin",
+                "ViewerProtocolPolicy": "redirect-to-https",
+                "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+              },
+              "CustomErrorResponses": [
+                {
+                  "ErrorCode": 403,
+                  "ErrorCachingMinTTL": 0,
+                  "ResponseCode": 200,
+                  "ResponsePagePath": "/index.html"
+                },
+                {
+                  "ErrorCode": 404,
+                  "ErrorCachingMinTTL": 0,
+                  "ResponseCode": 200,
+                  "ResponsePagePath": "/index.html"
+                }
+              ],
+              "Restrictions": {
+                "GeoRestriction": {
+                  "RestrictionType": "none"
+                }
+              },
+              "ViewerCertificate": {
+                "CloudFrontDefaultCertificate": true
+              }
+            }
+          }
+        }
+      },
+      "Outputs": {
+        "FrontendBucketName": {
+          "Description": "Private bucket holding the SPA assets",
+          "Value": {
+            "Ref": "FrontendBucket"
+          },
+          "Export": {
+            "Name": "pixel-war-frontend-dev-bucket"
+          }
+        },
+        "FrontendDistributionId": {
+          "Description": "CloudFront distribution id",
+          "Value": {
+            "Ref": "FrontendDistribution"
+          },
+          "Export": {
+            "Name": "pixel-war-frontend-dev-distribution-id"
+          }
+        },
+        "FrontendDistributionDomain": {
+          "Description": "CloudFront public domain",
+          "Value": {
+            "Fn::GetAtt": [
+              "FrontendDistribution",
+              "DomainName"
+            ]
+          },
+          "Export": {
+            "Name": "pixel-war-frontend-dev-distribution-domain"
+          }
+        }
+      }
+    },
+    "configValidationMode": "warn",
+    "serviceFilename": "serverless",
+    "initialServerlessConfig": {
+      "service": "pixel-war-frontend",
+      "frameworkVersion": "4",
+      "provider": {
+        "$ref": "$[\"service\"][\"provider\"]"
+      },
+      "plugins": {
+        "$ref": "$[\"service\"][\"plugins\"]"
+      },
+      "custom": {
+        "$ref": "$[\"service\"][\"custom\"]"
+      },
+      "resources": {
+        "$ref": "$[\"service\"][\"resources\"]"
+      }
+    },
+    "appId": null,
+    "orgId": null,
+    "layers": {}
+  },
+  "package": {
+    "artifactDirectoryName": "serverless/pixel-war-frontend/dev/1765008883340-2025-12-06T08:14:43.340Z",
+    "artifact": ""
+  }
+}
