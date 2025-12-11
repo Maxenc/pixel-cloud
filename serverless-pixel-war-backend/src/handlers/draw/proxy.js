@@ -9,18 +9,23 @@ const { getSession, checkInternalSecret } = require("../../utils/security");
 
 const MAX_WIDTH = parseInt(process.env.BOARD_WIDTH || "256");
 const MAX_HEIGHT = parseInt(process.env.BOARD_HEIGHT || "256");
+const MAX_PIXELS_PER_MINUTE = parseInt(process.env.MAX_PIXELS_PER_MINUTE || "20");
 
 const minuteBucket = () => new Date().toISOString().slice(0, 16);
 
 const enforceRateLimit = async (userId) => {
   const now = Math.floor(Date.now() / 1000);
+  const bucket = minuteBucket();
+
+  if (!userId) return false;
+
   try {
     await ddb.send(
       new UpdateItemCommand({
         TableName: process.env.RATE_LIMIT_TABLE,
         Key: {
           userId: { S: userId },
-          bucket: { S: minuteBucket() },
+          bucket: { S: bucket },
         },
         UpdateExpression: "ADD #count :inc SET #ttl = :ttl",
         ExpressionAttributeNames: {
@@ -30,14 +35,18 @@ const enforceRateLimit = async (userId) => {
         ExpressionAttributeValues: {
           ":inc": { N: "1" },
           ":ttl": { N: (now + 120).toString() },
-          ":max": { N: process.env.MAX_PIXELS_PER_MINUTE || "20" },
+          ":max": { N: MAX_PIXELS_PER_MINUTE.toString() },
         },
         ConditionExpression: "attribute_not_exists(#count) OR #count < :max",
       })
     );
     return true;
   } catch (err) {
-    if (err.name === "ConditionalCheckFailedException") {
+    if (
+      err.name === "ConditionalCheckFailedException" ||
+      err.Code === "ConditionalCheckFailedException"
+    ) {
+      console.warn(`Rate limit exceeded for user ${userId} in bucket ${bucket}`);
       return false;
     }
     throw err;

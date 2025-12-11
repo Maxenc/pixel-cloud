@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { appConfig, blankSnapshot, colorPalette } from "./config";
 import { PixelApi } from "./services/pixelApi";
 import { buildMockMeta } from "./utils/mock";
 import { useDiscordAuth } from "./hooks/useDiscordAuth";
+import { Credits } from "./components/Credits";
 import { Header } from "./components/Header";
 import { CanvasStage } from "./components/CanvasStage";
 import { PixelInfoCard } from "./components/PixelInfoCard";
@@ -11,6 +13,8 @@ import { StatusToast } from "./components/StatusToast";
 import { AdminPanel } from "./components/AdminPanel";
 import { GameStatePanel } from "./components/GameStatePanel";
 import { SnapshotDrawer } from "./components/SnapshotDrawer";
+import { Cursor } from "./components/Cursor";
+import { LoadingOverlay } from "./components/LoadingOverlay";
 import { extractSessionDataFromUrl } from "./utils/oauth";
 
 export default function App() {
@@ -65,9 +69,28 @@ export default function App() {
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
+    const stored = window.localStorage.getItem("pixel_cooldown_until");
+    if (stored) {
+      const until = parseInt(stored, 10);
+      const now = Date.now();
+      if (until > now) {
+        setCooldown(Math.ceil((until - now) / 1000));
+      } else {
+        window.localStorage.removeItem("pixel_cooldown_until");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!cooldown) return undefined;
     const id = setInterval(() => {
-      setCooldown((value) => Math.max(0, value - 1));
+      setCooldown((value) => {
+        if (value <= 1) {
+          window.localStorage.removeItem("pixel_cooldown_until");
+          return 0;
+        }
+        return value - 1;
+      });
     }, 1000);
     return () => clearInterval(id);
   }, [cooldown]);
@@ -398,6 +421,10 @@ export default function App() {
         username: user?.username,
       });
       setCooldown(cooldownDuration);
+      window.localStorage.setItem(
+        "pixel_cooldown_until",
+        (Date.now() + cooldownDuration * 1000).toString()
+      );
       setStatus({ type: "success", message: "Pixel envoyé..." });
       setShowPalette(false);
     } catch (error) {
@@ -513,16 +540,19 @@ export default function App() {
           refreshGameState(false);
         }}
       />
+      <Cursor />
 
-      {showAdminPanel && isAdmin && (
-        <AdminPanel
-          isPaused={isPaused}
-          onPause={handlePauseGame}
-          onResume={handleResumeGame}
-          onRequestSnapshot={handleRequestSnapshot}
-          onClose={() => setShowAdminPanel(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showAdminPanel && isAdmin && (
+          <AdminPanel
+            isPaused={isPaused}
+            onPause={handlePauseGame}
+            onResume={handleResumeGame}
+            onRequestSnapshot={handleRequestSnapshot}
+            onClose={() => setShowAdminPanel(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {cooldown > 0 && (
         <div className="rate-limit-banner">
@@ -584,45 +614,62 @@ export default function App() {
         />
       </section>
 
-      <PixelInfoCard
-        pixel={selectedPixel}
-        meta={pixelMeta}
-        position={pixelAnchor}
-        onClose={() => {
-          setSelectedPixel(null);
-          setPixelMeta(null);
-          setShowPalette(false);
-        }}
-        onPlace={handlePlacePixelClick}
-        canPlace={canPlacePixel}
-        cooldown={cooldown}
-      />
+      <AnimatePresence>
+        {selectedPixel && pixelMeta && pixelAnchor && (
+          <PixelInfoCard
+            key="pixel-info"
+            pixel={selectedPixel}
+            meta={pixelMeta}
+            position={pixelAnchor}
+            onClose={() => {
+              setSelectedPixel(null);
+              setPixelMeta(null);
+              setShowPalette(false);
+            }}
+            onPlace={handlePlacePixelClick}
+            canPlace={canPlacePixel}
+            cooldown={cooldown}
+          />
+        )}
+      </AnimatePresence>
 
-      {showPalette && selectedPixel && (
-        <ColorPickerPopover
-          position={pixelAnchor}
-          colors={quickPalette}
-          value={currentColor}
-          onSelect={setCurrentColor}
-          onConfirm={handleConfirmPlacement}
-          onCancel={handleCancelPlacement}
-          loading={placingPixel}
-          cooldown={cooldown}
-        />
-      )}
+      <AnimatePresence>
+        {showPalette && selectedPixel && (
+          <ColorPickerPopover
+            key="color-picker"
+            position={pixelAnchor}
+            colors={quickPalette}
+            value={currentColor}
+            onSelect={setCurrentColor}
+            onConfirm={handleConfirmPlacement}
+            onCancel={handleCancelPlacement}
+            loading={placingPixel}
+            cooldown={cooldown}
+          />
+        )}
+      </AnimatePresence>
 
-      <SnapshotDrawer
-        open={snapshotsOpen}
-        snapshots={snapshots}
-        loading={loadingSnapshots}
-        onClose={() => setSnapshotsOpen(false)}
-        onRefresh={loadSnapshots}
-        canCreateSnapshot={isAdmin}
-        onCreateSnapshot={handleRequestSnapshot}
-        requestingSnapshot={requestingSnapshot}
-      />
+      <AnimatePresence>
+        {snapshotsOpen && (
+          <SnapshotDrawer
+            open={snapshotsOpen}
+            snapshots={snapshots}
+            loading={loadingSnapshots}
+            onClose={() => setSnapshotsOpen(false)}
+            onRefresh={loadSnapshots}
+            canCreateSnapshot={isAdmin}
+            onCreateSnapshot={handleRequestSnapshot}
+            requestingSnapshot={requestingSnapshot}
+          />
+        )}
+      </AnimatePresence>
 
-      <StatusToast status={status} />
+      <AnimatePresence>
+        {status && <StatusToast status={status} key="status-toast" />}
+      </AnimatePresence>
+
+      <Credits />
+      <LoadingOverlay loading={loadingSnapshot} />
     </div>
   );
 }
