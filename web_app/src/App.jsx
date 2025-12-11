@@ -26,14 +26,14 @@ export default function App() {
   const [snapshot, setSnapshot] = useState(blankSnapshot);
   const [clientId] = useState(() => {
     if (typeof window === "undefined") return null;
-    const existing = window.localStorage.getItem("pixel_client_id");
+    const existing = window.sessionStorage.getItem("pixel_client_id");
     if (existing) return existing;
     const generated =
       (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
       `client-${Date.now().toString(36)}-${Math.random()
         .toString(16)
         .slice(2, 8)}`;
-    window.localStorage.setItem("pixel_client_id", generated);
+    window.sessionStorage.setItem("pixel_client_id", generated);
     return generated;
   });
   const [user, setUserState] = useState(() => {

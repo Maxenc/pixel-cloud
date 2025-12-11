@@ -30,7 +30,7 @@ const handler = async (event) => {
         QueueUrl: process.env.SNAPSHOT_QUEUE_URL,
         MessageBody: JSON.stringify({
           canvasId,
-          triggeredBy: effectiveUserId,
+          triggeredBy: userId,
           timestamp: new Date().toISOString(),
           callbackUrl: callbackUrl || null,
         }),
