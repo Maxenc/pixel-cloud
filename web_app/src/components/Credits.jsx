@@ -18,45 +18,33 @@ export function Credits() {
 
   const variants = {
     collapsed: {
-      top: 100,
-      left: "50%",
-      x: "-50%",
-      y: 0,
-      width: "auto",
-      borderRadius: 50,
-      padding: "6px 14px", // Reduced padding
-      position: "fixed",
+      borderRadius: 24,
+      padding: "8px 20px",
       borderWidth: "1px",
-      // Removed scale to rely on font size for "fineness"
+      width: "240px",
+      height: "42px",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
     },
     expanded: {
-      top: "50%",
-      left: "50%",
-      x: "-50%",
-      y: "-50%",
-      width: "min(400px, 85vw)",
       borderRadius: 24,
       padding: 32,
-      position: "fixed",
-      // scale: 1, // Default
+      width: "600px",
+      display: "block",
     },
     intro: {
-      top: "50%",
-      left: "50%",
-      x: "-50%",
-      y: "-50%",
-      width: "min(400px, 85vw)",
       borderRadius: 24,
       padding: 32,
-      position: "fixed",
-      // scale: 1,
+      width: "600px",
+      display: "block",
     },
   };
 
   return (
     <motion.div
       className={`credits-container ${mode}`}
-      // Removed 'layout' prop to prevent layout thrashing/centering bugs on mount
+      layout
       variants={variants}
       initial="intro"
       animate={mode}
@@ -69,9 +57,9 @@ export function Credits() {
             key="collapsed"
             className="credits-summary"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 1, scale: 0.9, y: 10 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
           >
             <span
               className="credits-role-micro"
@@ -96,9 +84,9 @@ export function Credits() {
           <motion.div
             key="expanded"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
           >
             <button
               className="credits-close"

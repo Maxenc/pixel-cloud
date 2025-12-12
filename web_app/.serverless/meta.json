@@ -1,6 +1,6 @@
 {
   "/Users/mks/Epitech/TEK 6/cloud/pixel-cloud/web_app/serverless.yml": {
-    "versionFramework": "4.27.1",
+    "versionFramework": "4.28.0",
     "servicePath": "/Users/mks/Epitech/TEK 6/cloud/pixel-cloud/web_app/serverless.yml",
     "serviceConfigFileName": "serverless.yml",
     "service": {
